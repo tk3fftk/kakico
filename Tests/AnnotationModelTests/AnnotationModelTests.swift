@@ -148,4 +148,19 @@ final class AnnotationModelTests: XCTestCase {
         XCTAssertEqual(FontSpec.suggestedPointSize(forStrokeWidth: 10), 40)
     }
 
+    func testDocumentCodableRoundTrip() throws {
+        let doc = Document(
+            baseImage: .pngData(Data([0, 1, 2, 3])),
+            canvasSize: CGSize(width: 640, height: 480),
+            elements: [
+                .arrow(SegmentElement(start: .zero, end: CGPoint(x: 100, y: 100))),
+                .text(TextElement(origin: CGPoint(x: 10, y: 10), string: "hi")),
+                .pixelate(RedactionElement(rect: CGRect(x: 0, y: 0, width: 50, height: 50), amount: 14)),
+            ],
+            crop: CGRect(x: 5, y: 5, width: 100, height: 100))
+        let data = try JSONEncoder().encode(doc)
+        let decoded = try JSONDecoder().decode(Document.self, from: data)
+        XCTAssertEqual(doc, decoded)
+    }
+
 }

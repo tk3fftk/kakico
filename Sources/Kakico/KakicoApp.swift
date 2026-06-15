@@ -49,7 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         DispatchQueue.main.async {
-            if let editMenu = NSApp.mainMenu?.items.first(where: { $0.title == "Edit" })?.submenu {
+            if let editMenu = NSApp.mainMenu?.items
+                .first(where: { $0.submenu?.items.contains(where: { $0.action == #selector(NSText.cut(_:)) }) == true })?.submenu {
                 self.editMenuDelegate = EditMenuFilter()
                 editMenu.delegate = self.editMenuDelegate
             }

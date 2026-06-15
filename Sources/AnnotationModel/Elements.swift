@@ -94,7 +94,7 @@ public struct TextElement: Codable, Equatable, Sendable, RectGeometry {
     }
 }
 
-// MARK: - Redaction (pixelate / blur)
+// MARK: - Redaction (pixelate)
 
 public struct RedactionElement: Codable, Equatable, Sendable, RectGeometry {
     /// Default strengths for freshly created redactions.
@@ -102,7 +102,7 @@ public struct RedactionElement: Codable, Equatable, Sendable, RectGeometry {
 
     public var id: ElementID
     public var rect: CGRect
-    public var amount: CGFloat        // pixel block size or blur radius
+    public var amount: CGFloat        // pixel block size
 
     public init(id: ElementID = UUID(), rect: CGRect, amount: CGFloat = 16) {
         self.id = id; self.rect = rect; self.amount = amount
