@@ -36,6 +36,10 @@ final class CanvasNSView: NSView {
     }
     private var drag: Drag = .none
     private var flattened: CGImage?
+    // Cache key for `flattened`: re-render only when the content it shows
+    // (document sans crop + base image) actually changes, not on every redraw.
+    private var flattenedKey: Document?
+    private var flattenedBase: CGImage?
     private var textEditor: NSTextView?
     private var editingTextID: ElementID?
     private var antsTimer: Timer?
@@ -53,7 +57,6 @@ final class CanvasNSView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     func refresh() {
-        flattened = nil
         needsDisplay = true
     }
 
@@ -89,18 +92,25 @@ final class CanvasNSView: NSView {
 
     private var modelTolerance: CGFloat { 8 / max(displayScale, 0.0001) }
 
+    private func viewRect(forModelRect box: CGRect) -> CGRect {
+        CGRect(corner: modelToView(CGPoint(x: box.minX, y: box.minY)),
+               modelToView(CGPoint(x: box.maxX, y: box.maxY)))
+    }
+
     // MARK: Drawing
 
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext,
               let controller, let doc = controller.document else { return }
 
-        if flattened == nil {
-            // Display always shows the full canvas; a pending crop is shown as
-            // an overlay, not by shrinking the flattened image.
-            var displayDoc = doc
-            displayDoc.crop = nil
+        // Display always shows the full canvas; a pending crop is shown as
+        // an overlay, not by shrinking the flattened image.
+        var displayDoc = doc
+        displayDoc.crop = nil
+        if flattened == nil || flattenedKey != displayDoc || flattenedBase !== controller.baseImage {
             flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1)
+            flattenedKey = displayDoc
+            flattenedBase = controller.baseImage
         }
         if let img = flattened {
             ctx.interpolationQuality = .high
@@ -119,10 +129,17 @@ final class CanvasNSView: NSView {
         }
     }
 
+    private func drawHandle(at center: CGPoint, stroke: NSColor, lineWidth: CGFloat, in ctx: CGContext) {
+        let hr = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
+        ctx.setFillColor(NSColor.white.cgColor)
+        ctx.fill(hr)
+        ctx.setStrokeColor(stroke.cgColor)
+        ctx.setLineWidth(lineWidth)
+        ctx.stroke(hr)
+    }
+
     private func drawSelection(_ element: Annotation, in ctx: CGContext) {
-        let box = element.boundingBox()
-        let viewBox = CGRect(corner: modelToView(CGPoint(x: box.minX, y: box.minY)),
-                             modelToView(CGPoint(x: box.maxX, y: box.maxY)))
+        let viewBox = viewRect(forModelRect: element.boundingBox())
         ctx.setStrokeColor(NSColor.controlAccentColor.withAlphaComponent(0.9).cgColor)
         ctx.setLineWidth(1)
         ctx.setLineDash(phase: 0, lengths: [4, 3])
@@ -130,19 +147,13 @@ final class CanvasNSView: NSView {
         ctx.setLineDash(phase: 0, lengths: [])
 
         for handle in element.handles() {
-            let c = modelToView(handle.position)
-            let hr = CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8)
-            ctx.setFillColor(NSColor.white.cgColor)
-            ctx.fill(hr)
-            ctx.setStrokeColor(NSColor.controlAccentColor.cgColor)
-            ctx.setLineWidth(1.5)
-            ctx.stroke(hr)
+            drawHandle(at: modelToView(handle.position),
+                       stroke: NSColor.controlAccentColor, lineWidth: 1.5, in: ctx)
         }
     }
 
     private func drawCropOverlay(_ crop: CGRect, in ctx: CGContext) {
-        let viewCrop = CGRect(corner: modelToView(CGPoint(x: crop.minX, y: crop.minY)),
-                              modelToView(CGPoint(x: crop.maxX, y: crop.maxY)))
+        let viewCrop = viewRect(forModelRect: crop)
         ctx.setFillColor(NSColor.black.withAlphaComponent(0.45).cgColor)
         ctx.fill(displayRect)
         ctx.clear(viewCrop)
@@ -160,14 +171,9 @@ final class CanvasNSView: NSView {
         ctx.setLineDash(phase: 0, lengths: [])
 
         // Corner handles so the crop rect is re-editable with the crop tool.
-        for corner in [viewCrop.corners.topLeft, viewCrop.corners.topRight,
-                       viewCrop.corners.bottomLeft, viewCrop.corners.bottomRight] {
-            let hr = CGRect(x: corner.x - 4, y: corner.y - 4, width: 8, height: 8)
-            ctx.setFillColor(NSColor.white.cgColor)
-            ctx.fill(hr)
-            ctx.setStrokeColor(NSColor.black.withAlphaComponent(0.6).cgColor)
-            ctx.setLineWidth(1)
-            ctx.stroke(hr)
+        for handle in viewCrop.cornerHandles() {
+            drawHandle(at: handle.position,
+                       stroke: NSColor.black.withAlphaComponent(0.6), lineWidth: 1, in: ctx)
         }
     }
 
@@ -252,15 +258,12 @@ final class CanvasNSView: NSView {
     /// the opposite corner), drag inside it to move it, or start a new rect.
     private func handleCropMouseDown(at p: CGPoint, viewPoint: CGPoint) {
         if let crop = controller?.document?.crop, crop.width > 0, crop.height > 0 {
-            let c = crop.corners
-            let cornerPairs: [(corner: CGPoint, anchor: CGPoint)] = [
-                (c.topLeft, c.bottomRight), (c.topRight, c.bottomLeft),
-                (c.bottomLeft, c.topRight), (c.bottomRight, c.topLeft),
-            ]
-            for pair in cornerPairs {
-                let v = modelToView(pair.corner)
-                if hypot(v.x - viewPoint.x, v.y - viewPoint.y) <= 8 {
-                    drag = .cropping(anchor: pair.anchor)
+            let handles = crop.cornerHandles()
+            for handle in handles {
+                let v = modelToView(handle.position)
+                if hypot(v.x - viewPoint.x, v.y - viewPoint.y) <= 8,
+                   let anchor = handles.first(where: { $0.role == handle.role.opposite }) {
+                    drag = .cropping(anchor: anchor.position)
                     return
                 }
             }
@@ -282,9 +285,9 @@ final class CanvasNSView: NSView {
         var role: HandleRole = .bottomRight
         switch tool {
         case .arrow:
-            new = .arrow(ArrowElement(start: p, end: p, color: color, width: width)); role = .end
+            new = .arrow(SegmentElement(start: p, end: p, color: color, width: width)); role = .end
         case .line:
-            new = .line(LineElement(start: p, end: p, color: color, width: width)); role = .end
+            new = .line(SegmentElement(start: p, end: p, color: color, width: width)); role = .end
         case .rectangle:
             new = .rectangle(ShapeElement(rect: zeroRect, color: color, width: width))
         case .ellipse:
@@ -292,9 +295,9 @@ final class CanvasNSView: NSView {
         case .stamp:
             new = .stamp(StampElement(rect: zeroRect, kind: controller.stampKind, color: color))
         case .pixelate:
-            new = .pixelate(RedactionElement(rect: zeroRect, amount: 14))
+            new = .pixelate(RedactionElement(rect: zeroRect, amount: RedactionElement.defaultPixelateAmount))
         case .blur:
-            new = .blur(RedactionElement(rect: zeroRect, amount: 12))
+            new = .blur(RedactionElement(rect: zeroRect, amount: RedactionElement.defaultBlurAmount))
         default:
             return
         }
@@ -306,7 +309,8 @@ final class CanvasNSView: NSView {
     private func createText(at p: CGPoint) {
         guard let controller else { return }
         let element = TextElement(origin: p, size: CGSize(width: 220, height: 44),
-                                  string: "", font: FontSpec(pointSize: Double(max(18, controller.strokeWidth * 4))),
+                                  string: "",
+                                  font: FontSpec(pointSize: FontSpec.suggestedPointSize(forStrokeWidth: controller.strokeWidth)),
                                   color: controller.strokeColor)
         controller.document?.add(.text(element))
         controller.selection = element.id
@@ -323,14 +327,10 @@ final class CanvasNSView: NSView {
             return
         case .moving(let id, let last):
             let delta = CGVector(dx: p.x - last.x, dy: p.y - last.y)
-            if let i = controller.document?.index(of: id) {
-                controller.document?.elements[i].translate(by: delta)
-            }
+            controller.document?.mutate(id) { $0.translate(by: delta) }
             drag = .moving(id, last: p)
         case .handle(let id, let role), .creating(let id, let role):
-            if let i = controller.document?.index(of: id) {
-                controller.document?.elements[i].moveHandle(role, to: p)
-            }
+            controller.document?.mutate(id) { $0.moveHandle(role, to: p) }
         case .cropping(let anchor):
             controller.document?.crop = CGRect(corner: anchor, p)
         case .movingCrop(let last):
@@ -355,9 +355,7 @@ final class CanvasNSView: NSView {
         switch drag {
         case .cropping, .movingCrop:
             if let doc = controller.document, let crop = doc.crop {
-                let clamped = crop.intersection(CGRect(origin: .zero, size: doc.canvasSize))
-                controller.document?.crop =
-                    (clamped.isNull || clamped.width < 2 || clamped.height < 2) ? nil : clamped
+                controller.document?.crop = doc.clampedCrop(crop)
             }
         default:
             break
@@ -402,10 +400,7 @@ final class CanvasNSView: NSView {
               case .text(let text) = element else { return }
         commitTextEditing()
 
-        let box = element.boundingBox()
-        let viewRect = CGRect(corner: modelToView(CGPoint(x: box.minX, y: box.minY)),
-                              modelToView(CGPoint(x: box.maxX, y: box.maxY)))
-        let tv = NSTextView(frame: viewRect.insetBy(dx: -2, dy: -2))
+        let tv = NSTextView(frame: viewRect(forModelRect: element.boundingBox()).insetBy(dx: -2, dy: -2))
         tv.string = text.string
         tv.font = nsFont(for: text.font, scale: displayScale)
         tv.textColor = nsColor(text.color)
@@ -431,9 +426,11 @@ final class CanvasNSView: NSView {
             if controller.selection == id { controller.selection = nil }
         } else {
             controller.perform { doc in
-                if let i = doc.index(of: id), case .text(var t) = doc.elements[i] {
-                    t.string = newString
-                    doc.elements[i] = .text(t)
+                doc.mutate(id) { annotation in
+                    if case .text(var t) = annotation {
+                        t.string = newString
+                        annotation = .text(t)
+                    }
                 }
             }
         }

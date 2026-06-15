@@ -69,9 +69,9 @@ Value-type, enum-discriminated model (`Codable`/`Equatable`/`Sendable` — free 
 
 ```swift
 enum Annotation: Codable, Equatable, Identifiable {
-    case arrow(ArrowElement)
-    case line(LineElement)
-    case rectangle(ShapeElement)
+    case arrow(SegmentElement)      // arrow + line share one struct
+    case line(SegmentElement)
+    case rectangle(ShapeElement)    // rectangle + ellipse share one struct
     case ellipse(ShapeElement)
     case text(TextElement)
     case stamp(StampElement)
@@ -87,12 +87,20 @@ struct Document: Codable, Equatable {
 }
 ```
 
-Geometry via a protocol on the view-model side (keep the model pure):
-`boundingBox()`, `hitTest(_:tolerance:)`, `handles()`, `moveHandle(_:to:)`, `translate(by:)`.
-`Handle` roles: `.resize(corner)`, `.endpoint`, `.width`, `.move`.
+Geometry via an `AnnotationGeometry` protocol defined **in `AnnotationModel`** (the element
+value types conform directly — "pure" meaning no UI-framework dependency, so it stays
+headless-testable):
+`boundingBox()`, `hitTest(_:tolerance:)`, `handles()`, `moveHandle(_:to:)`, `translate(by:)`
+(plus `id`). Rect-backed elements share a `RectGeometry` sub-protocol that supplies the
+common corner-handle / resize / translate / hit-test defaults.
+`Handle` roles (`HandleRole`): `.move`, `.start`, `.end`, and the four corners
+`.topLeft` / `.topRight` / `.bottomLeft` / `.bottomRight`. (No `.width` handle — stroke
+width is set from the toolbar slider, not by dragging.)
 
 - Hit-test: distance-to-segment for vectors; edge-band/area for shapes; bbox for text/stamp; topmost-first (reversed iteration).
-- `CanvasViewModel` (`@Observable`) holds document + selection + `UndoManager`; undo = element-array snapshot.
+- `CanvasController` (`ObservableObject` + `@Published`) holds document + selection; undo is
+  a hand-rolled snapshot stack of `(Document, baseImage)` pairs (not `UndoManager` — applying
+  a crop swaps the base image, so the snapshot must carry it).
 - Model in **image pixel space**; canvas applies one zoom/offset transform.
 - Native save format: own `.kakico` JSON package (`document.json` + embedded `base.png`).
 
@@ -161,7 +169,7 @@ existed. No code/art/format is copied from these.
 ## Implementation status (2026-06-12)
 
 Everything above is implemented in `Kakico/`. Verified: `swift test` all green
-(9 model + 10 render/E2E tests), `scripts/build-app.sh release` produces an
+(20 model + 10 render/E2E tests), `scripts/build-app.sh release` produces an
 ad-hoc-signed bundle (`codesign --verify` passes, `lipo` reports `arm64`), and the app
 was launched natively (proc_translated = 0) and exercised end-to-end.
 
@@ -182,6 +190,28 @@ was launched natively (proc_translated = 0) and exercised end-to-end.
   applying a crop destructively swaps the base image, and undo must restore it.
 - **Zoom/offset transform:** the canvas aspect-fits the image (one computed
   scale/offset); there is no user-controlled zoom yet.
+
+### Simplification pass (2026-06-15)
+
+A `/simplify` review consolidated duplicated code without changing behavior (the
+on-disk `.kakico` JSON shape is unchanged — a legacy-fixture decode test guards it):
+
+- **`SegmentElement` replaces `ArrowElement`/`LineElement`** — they were identical, so
+  arrow and line now wrap one struct (mirroring how rectangle/ellipse share `ShapeElement`).
+- **`RectGeometry` protocol** (in `AnnotationModel`) supplies the shared corner-handle /
+  resize / translate / inset-hit-test behaviour for `ShapeElement`, `StampElement`,
+  `RedactionElement`, and `TextElement` (which conforms via a computed `rect` over its
+  stored origin/size). `id` moved onto the `AnnotationGeometry` protocol.
+- **UI policy pushed into the model:** `RedactionElement.defaultPixelateAmount/.defaultBlurAmount`
+  and `FontSpec.suggestedPointSize(forStrokeWidth:)` (was hard-coded in the view), plus
+  `Document.mutate(id:_:)` and a single `Document.clampedCrop(_:)` normalizer (crop
+  clamping had been duplicated with diverging rules in the view and controller).
+- **Renderer** factored out the y-flip transform, fill-colour setup, and the
+  pixelate/blur `CIFilter` construction into shared helpers.
+- **Canvas** now caches the flattened image by content (re-renders only when the document
+  or base image changes, not on every selection redraw) and shares `viewRect`/`drawHandle`
+  helpers; crop corners reuse `cornerHandles()`/`HandleRole.opposite`. A shared
+  `ImageLoader` deduplicates `CGImageSource` decoding.
 
 ### Notable fix found during verification
 

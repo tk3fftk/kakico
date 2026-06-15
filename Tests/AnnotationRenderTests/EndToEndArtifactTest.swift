@@ -19,13 +19,13 @@ final class EndToEndArtifactTest: XCTestCase {
         let size = CGSize(width: base.width, height: base.height)
         var doc = Document(baseImage: .file(path: inURL.path), canvasSize: size)
 
-        doc.add(.arrow(ArrowElement(start: CGPoint(x: 80, y: 320), end: CGPoint(x: 250, y: 150),
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 80, y: 320), end: CGPoint(x: 250, y: 150),
                                     color: .red, width: 8)))
         doc.add(.rectangle(ShapeElement(rect: CGRect(x: 300, y: 60, width: 200, height: 150),
                                         color: .blue, width: 6)))
         doc.add(.ellipse(ShapeElement(rect: CGRect(x: 60, y: 60, width: 200, height: 140),
                                       color: .green, width: 6)))
-        doc.add(.line(LineElement(start: CGPoint(x: 60, y: 240), end: CGPoint(x: 540, y: 240),
+        doc.add(.line(SegmentElement(start: CGPoint(x: 60, y: 240), end: CGPoint(x: 540, y: 240),
                                   color: .yellow, width: 5)))
         doc.add(.text(TextElement(origin: CGPoint(x: 70, y: 20), size: CGSize(width: 400, height: 40),
                                   string: "Kakico — native arm64", font: FontSpec(pointSize: 30, bold: true),

@@ -99,7 +99,7 @@ final class AnnotationRenderTests: XCTestCase {
         let base = solidImage(CGSize(width: 100, height: 100), color: (1, 1, 1))
         var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 100))
         let plain = Renderer.flatten(doc, baseImage: base, scale: 1)!
-        doc.add(.arrow(ArrowElement(start: CGPoint(x: 10, y: 50), end: CGPoint(x: 90, y: 50), color: .red, width: 8)))
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 10, y: 50), end: CGPoint(x: 90, y: 50), color: .red, width: 8)))
         let annotated = Renderer.flatten(doc, baseImage: base, scale: 1)!
         XCTAssertNotEqual(pixelHash(plain), pixelHash(annotated))
     }

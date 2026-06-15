@@ -4,8 +4,8 @@ import CoreGraphics
 /// A single annotation, discriminated by kind. Value type → cheap snapshots
 /// for undo, free Codable/Equatable.
 public enum Annotation: Codable, Equatable, Sendable, Identifiable {
-    case arrow(ArrowElement)
-    case line(LineElement)
+    case arrow(SegmentElement)
+    case line(SegmentElement)
     case rectangle(ShapeElement)
     case ellipse(ShapeElement)
     case text(TextElement)
@@ -13,18 +13,7 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     case pixelate(RedactionElement)
     case blur(RedactionElement)
 
-    public var id: ElementID {
-        switch self {
-        case .arrow(let e): return e.id
-        case .line(let e): return e.id
-        case .rectangle(let e): return e.id
-        case .ellipse(let e): return e.id
-        case .text(let e): return e.id
-        case .stamp(let e): return e.id
-        case .pixelate(let e): return e.id
-        case .blur(let e): return e.id
-        }
-    }
+    public var id: ElementID { geometry.id }
 
     /// Read-only access to the element's geometry behaviour.
     public var geometry: AnnotationGeometry {
@@ -55,8 +44,8 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     /// Applies a mutation to the wrapped element while preserving its kind.
     private mutating func mutate(_ body: (inout AnnotationGeometry) -> Void) {
         switch self {
-        case .arrow(var e): var g: AnnotationGeometry = e; body(&g); e = g as! ArrowElement; self = .arrow(e)
-        case .line(var e): var g: AnnotationGeometry = e; body(&g); e = g as! LineElement; self = .line(e)
+        case .arrow(var e): var g: AnnotationGeometry = e; body(&g); e = g as! SegmentElement; self = .arrow(e)
+        case .line(var e): var g: AnnotationGeometry = e; body(&g); e = g as! SegmentElement; self = .line(e)
         case .rectangle(var e): var g: AnnotationGeometry = e; body(&g); e = g as! ShapeElement; self = .rectangle(e)
         case .ellipse(var e): var g: AnnotationGeometry = e; body(&g); e = g as! ShapeElement; self = .ellipse(e)
         case .text(var e): var g: AnnotationGeometry = e; body(&g); e = g as! TextElement; self = .text(e)

@@ -37,6 +37,19 @@ public struct Document: Codable, Equatable, Sendable {
         return nil
     }
 
+    /// Mutates the element with `id` in place; no-op when absent.
+    public mutating func mutate(_ id: ElementID, _ body: (inout Annotation) -> Void) {
+        if let i = index(of: id) { body(&elements[i]) }
+    }
+
+    /// `rect` constrained to the canvas, or nil when the result is degenerate
+    /// (thinner than 2pt either way) — the single source of crop validity.
+    public func clampedCrop(_ rect: CGRect) -> CGRect? {
+        let clamped = rect.intersection(CGRect(origin: .zero, size: canvasSize))
+        guard !clamped.isNull, clamped.width >= 2, clamped.height >= 2 else { return nil }
+        return clamped
+    }
+
     public mutating func add(_ element: Annotation) {
         elements.append(element)
     }

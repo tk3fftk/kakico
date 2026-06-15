@@ -33,6 +33,12 @@ public struct FontSpec: Codable, Equatable, Sendable {
         self.pointSize = pointSize
         self.bold = bold
     }
+
+    /// Point size for new text elements, derived from the current stroke
+    /// width so text roughly matches the weight of drawn annotations.
+    public static func suggestedPointSize(forStrokeWidth width: CGFloat) -> Double {
+        Double(max(18, width * 4))
+    }
 }
 
 /// A reference to the base image. Either an absolute file path or PNG bytes

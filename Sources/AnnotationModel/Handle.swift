@@ -10,6 +10,18 @@ public enum HandleRole: Codable, Equatable, Hashable, Sendable {
     case topRight
     case bottomLeft
     case bottomRight
+
+    /// The diagonally opposite corner — the anchor when resizing by this
+    /// corner. Nil for non-corner roles.
+    public var opposite: HandleRole? {
+        switch self {
+        case .topLeft: return .bottomRight
+        case .topRight: return .bottomLeft
+        case .bottomLeft: return .topRight
+        case .bottomRight: return .topLeft
+        case .move, .start, .end: return nil
+        }
+    }
 }
 
 public struct Handle: Equatable, Sendable {
@@ -25,6 +37,7 @@ public struct Handle: Equatable, Sendable {
 /// Shared geometric behaviour every element implements. Kept pure so it is
 /// unit-testable without any UI framework.
 public protocol AnnotationGeometry {
+    var id: ElementID { get }
     func boundingBox() -> CGRect
     func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool
     func handles() -> [Handle]
@@ -32,8 +45,32 @@ public protocol AnnotationGeometry {
     mutating func translate(by delta: CGVector)
 }
 
+/// A rect-backed element. Conformers get corner handles, opposite-corner
+/// resizing, translation, and an inset-contains hit test for free.
+public protocol RectGeometry: AnnotationGeometry {
+    var rect: CGRect { get set }
+}
+
+public extension RectGeometry {
+    func boundingBox() -> CGRect { rect }
+
+    func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool {
+        rect.insetBy(dx: -tolerance, dy: -tolerance).contains(point)
+    }
+
+    func handles() -> [Handle] { rect.cornerHandles() }
+
+    mutating func moveHandle(_ role: HandleRole, to point: CGPoint) {
+        rect = rect.movingCorner(role, to: point)
+    }
+
+    mutating func translate(by delta: CGVector) {
+        rect = rect.offsetBy(dx: delta.dx, dy: delta.dy)
+    }
+}
+
 extension CGRect {
-    func cornerHandles() -> [Handle] {
+    public func cornerHandles() -> [Handle] {
         let c = corners
         return [
             Handle(role: .topLeft, position: c.topLeft),
@@ -44,7 +81,7 @@ extension CGRect {
     }
 
     /// Returns a copy of this rect with the given corner moved to `point`.
-    func movingCorner(_ role: HandleRole, to point: CGPoint) -> CGRect {
+    public func movingCorner(_ role: HandleRole, to point: CGPoint) -> CGRect {
         let c = corners
         switch role {
         case .topLeft:     return CGRect(corner: point, c.bottomRight)

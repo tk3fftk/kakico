@@ -76,15 +76,22 @@ public enum Renderer {
         }
     }
 
-    /// `CGContext.draw` assumes a y-up space, but the renderer runs with a
-    /// y-down (model-space) CTM, which would mirror images vertically. Flip
-    /// locally around the rect so the image lands upright.
-    private static func drawImage(_ image: CGImage, in rect: CGRect, ctx: CGContext) {
+    /// CGContext image/text drawing assumes a y-up space, but the renderer
+    /// runs with a y-down (model-space) CTM, which would mirror content
+    /// vertically. Runs `body` with the context flipped locally around `rect`
+    /// so the content lands upright.
+    private static func withYFlip(around rect: CGRect, in ctx: CGContext, _ body: () -> Void) {
         ctx.saveGState()
         ctx.translateBy(x: 0, y: rect.maxY + rect.minY)
         ctx.scaleBy(x: 1, y: -1)
-        ctx.draw(image, in: rect)
+        body()
         ctx.restoreGState()
+    }
+
+    private static func drawImage(_ image: CGImage, in rect: CGRect, ctx: CGContext) {
+        withYFlip(around: rect, in: ctx) {
+            ctx.draw(image, in: rect)
+        }
     }
 
     private static func setStroke(_ ctx: CGContext, _ color: RGBAColor, _ width: CGFloat) {
@@ -94,7 +101,11 @@ public enum Renderer {
         ctx.setLineJoin(.round)
     }
 
-    private static func drawLine(_ e: LineElement, in ctx: CGContext) {
+    private static func setFill(_ ctx: CGContext, _ color: RGBAColor) {
+        ctx.setFillColor(red: color.r, green: color.g, blue: color.b, alpha: color.a)
+    }
+
+    private static func drawLine(_ e: SegmentElement, in ctx: CGContext) {
         setStroke(ctx, e.color, e.width)
         ctx.beginPath()
         ctx.move(to: e.start)
@@ -102,7 +113,7 @@ public enum Renderer {
         ctx.strokePath()
     }
 
-    private static func drawArrow(_ e: ArrowElement, in ctx: CGContext) {
+    private static func drawArrow(_ e: SegmentElement, in ctx: CGContext) {
         setStroke(ctx, e.color, e.width)
         // Shaft
         ctx.beginPath()
@@ -117,7 +128,7 @@ public enum Renderer {
                          y: e.end.y - headLength * sin(angle - spread))
         let p2 = CGPoint(x: e.end.x - headLength * cos(angle + spread),
                          y: e.end.y - headLength * sin(angle + spread))
-        ctx.setFillColor(red: e.color.r, green: e.color.g, blue: e.color.b, alpha: e.color.a)
+        setFill(ctx, e.color)
         ctx.beginPath()
         ctx.move(to: e.end)
         ctx.addLine(to: p1)
@@ -128,7 +139,7 @@ public enum Renderer {
 
     private static func drawRect(_ e: ShapeElement, in ctx: CGContext) {
         if let fill = e.fill {
-            ctx.setFillColor(red: fill.r, green: fill.g, blue: fill.b, alpha: fill.a)
+            setFill(ctx, fill)
             ctx.fill(e.rect)
         }
         setStroke(ctx, e.color, e.width)
@@ -137,7 +148,7 @@ public enum Renderer {
 
     private static func drawEllipse(_ e: ShapeElement, in ctx: CGContext) {
         if let fill = e.fill {
-            ctx.setFillColor(red: fill.r, green: fill.g, blue: fill.b, alpha: fill.a)
+            setFill(ctx, fill)
             ctx.fillEllipse(in: e.rect)
         }
         setStroke(ctx, e.color, e.width)
@@ -159,18 +170,14 @@ public enum Renderer {
         let path = CGPath(rect: e.boundingBox(), transform: nil)
         let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
 
-        // Text box is in y-down model space; flip locally so glyphs are upright.
-        ctx.saveGState()
-        let box = e.boundingBox()
-        ctx.translateBy(x: 0, y: box.maxY + box.minY)
-        ctx.scaleBy(x: 1, y: -1)
-        CTFrameDraw(frame, ctx)
-        ctx.restoreGState()
+        withYFlip(around: e.boundingBox(), in: ctx) {
+            CTFrameDraw(frame, ctx)
+        }
     }
 
     private static func drawStamp(_ e: StampElement, in ctx: CGContext) {
         let path = StampPaths.path(for: e.kind, in: e.rect)
-        ctx.setFillColor(red: e.color.r, green: e.color.g, blue: e.color.b, alpha: e.color.a)
+        setFill(ctx, e.color)
         ctx.addPath(path)
         ctx.fillPath()
     }
@@ -188,21 +195,16 @@ public enum Renderer {
         let flippedY = canvasSize.height - rect.maxY
         let ciRect = CGRect(x: rect.minX, y: flippedY, width: rect.width, height: rect.height)
 
-        let clamped = ciImage.clampedToExtent()
-        let filtered: CIImage
+        let (name, amountKey, minAmount) = pixelate
+            ? ("CIPixellate", kCIInputScaleKey, CGFloat(2))
+            : ("CIGaussianBlur", kCIInputRadiusKey, CGFloat(1))
+        let f = CIFilter(name: name)!
+        f.setValue(ciImage.clampedToExtent(), forKey: kCIInputImageKey)
+        f.setValue(max(minAmount, amount), forKey: amountKey)
         if pixelate {
-            let f = CIFilter(name: "CIPixellate")!
-            f.setValue(clamped, forKey: kCIInputImageKey)
-            f.setValue(max(2, amount), forKey: kCIInputScaleKey)
             f.setValue(CIVector(x: ciRect.midX, y: ciRect.midY), forKey: kCIInputCenterKey)
-            filtered = f.outputImage!
-        } else {
-            let f = CIFilter(name: "CIGaussianBlur")!
-            f.setValue(clamped, forKey: kCIInputImageKey)
-            f.setValue(max(1, amount), forKey: kCIInputRadiusKey)
-            filtered = f.outputImage!
         }
-        let cropped = filtered.cropped(to: ciRect)
+        let cropped = f.outputImage!.cropped(to: ciRect)
         guard let out = ciContext.createCGImage(cropped, from: ciRect) else { return }
         drawImage(out, in: rect, ctx: ctx)
     }

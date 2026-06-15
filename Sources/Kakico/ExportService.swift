@@ -39,8 +39,8 @@ enum ExportService {
         panel.nameFieldStringValue = "\(base).png"
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            let type: UTType = url.pathExtension.lowercased() == "jpg"
-                || url.pathExtension.lowercased() == "jpeg" ? .jpeg : .png
+            let ext = url.pathExtension.lowercased()
+            let type: UTType = (ext == "jpg" || ext == "jpeg") ? .jpeg : .png
             export(controller, to: url, as: type)
         }
     }
@@ -121,8 +121,7 @@ enum ExportService {
                 let data = try Data(contentsOf: url)
                 let doc = try JSONDecoder().decode(Document.self, from: data)
                 guard case .pngData(let png) = doc.baseImage,
-                      let src = CGImageSourceCreateWithData(png as CFData, nil),
-                      let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
+                      let cg = ImageLoader.cgImage(from: png) else {
                     NSSound.beep(); return
                 }
                 controller.loadImage(cg)

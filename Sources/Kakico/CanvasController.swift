@@ -34,8 +34,7 @@ final class CanvasController: ObservableObject {
     // MARK: - Loading
 
     func loadImage(at url: URL) {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
+        guard let image = ImageLoader.cgImage(from: url) else {
             NSSound.beep()
             return
         }
@@ -131,10 +130,8 @@ final class CanvasController: ObservableObject {
     /// elements into the new origin, and shrinks the canvas. Undoable; the
     /// crop stays non-destructive (re-editable) until this is called.
     func applyCrop() {
-        guard let doc = document, let crop = doc.crop, let base = baseImage else { return }
-        let bounds = CGRect(origin: .zero, size: doc.canvasSize)
-        let clamped = crop.intersection(bounds).integral
-        guard clamped.width >= 1, clamped.height >= 1,
+        guard let doc = document, let crop = doc.crop, let base = baseImage,
+              let clamped = doc.clampedCrop(crop)?.integral,
               let croppedBase = base.cropping(to: clamped) else { return }
 
         var newDoc = doc
