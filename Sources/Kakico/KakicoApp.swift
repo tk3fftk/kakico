@@ -5,10 +5,10 @@ let blockedMenuTitles: Set<String> = [
     "Writing Tools", "AutoFill",
     "Start Dictation\u{2026}", "Emoji & Symbols",
 ]
-let blockedMenuActions: Set<String> = [
-    "orderFrontCharacterPalette:",
-    "startDictation:",
-    "orderFrontWritingTools:",
+let blockedMenuActions: Set<Selector> = [
+    #selector(NSApplication.orderFrontCharacterPalette(_:)),
+    NSSelectorFromString("startDictation:"),
+    NSSelectorFromString("orderFrontWritingTools:"),
 ]
 
 @main
@@ -63,7 +63,7 @@ private class EditMenuFilter: NSObject, NSMenuDelegate {
         for item in menu.items {
             guard !item.isSeparatorItem else { continue }
             if let action = item.action {
-                item.isHidden = blockedMenuActions.contains(NSStringFromSelector(action))
+                item.isHidden = blockedMenuActions.contains(action)
             } else {
                 item.isHidden = blockedMenuTitles.contains(item.title)
             }

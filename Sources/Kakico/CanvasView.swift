@@ -9,7 +9,7 @@ private class MinimalTextView: NSTextView {
         super.willOpenMenu(menu, with: event)
         menu.items.removeAll { item in
             if let action = item.action {
-                return blockedMenuActions.contains(NSStringFromSelector(action))
+                return blockedMenuActions.contains(action)
             }
             return blockedMenuTitles.contains(item.title)
         }
