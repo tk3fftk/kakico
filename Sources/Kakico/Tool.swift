@@ -7,9 +7,7 @@ enum Tool: String, CaseIterable, Identifiable {
     case rectangle
     case ellipse
     case text
-    case stamp
     case pixelate
-    case blur
     case crop
 
     var id: String { rawValue }
@@ -22,9 +20,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .rectangle: return "Rectangle"
         case .ellipse: return "Ellipse"
         case .text: return "Text"
-        case .stamp: return "Stamp"
         case .pixelate: return "Pixelate"
-        case .blur: return "Blur"
         case .crop: return "Crop"
         }
     }
@@ -38,9 +34,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .rectangle: return "rectangle"
         case .ellipse: return "circle"
         case .text: return "textformat"
-        case .stamp: return "checkmark.seal"
         case .pixelate: return "squareshape.split.3x3"
-        case .blur: return "drop"
         case .crop: return "crop"
         }
     }

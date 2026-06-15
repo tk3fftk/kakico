@@ -30,10 +30,7 @@ final class EndToEndArtifactTest: XCTestCase {
         doc.add(.text(TextElement(origin: CGPoint(x: 70, y: 20), size: CGSize(width: 400, height: 40),
                                   string: "Kakico — native arm64", font: FontSpec(pointSize: 30, bold: true),
                                   color: .black)))
-        doc.add(.blur(RedactionElement(rect: CGRect(x: 340, y: 250, width: 140, height: 90), amount: 12)))
         doc.add(.pixelate(RedactionElement(rect: CGRect(x: 100, y: 250, width: 120, height: 80), amount: 14)))
-        doc.add(.stamp(StampElement(rect: CGRect(x: 480, y: 300, width: 80, height: 80),
-                                    kind: .check, color: .green)))
 
         let flat = try XCTUnwrap(Renderer.flatten(doc, baseImage: base, scale: 1))
         XCTAssertEqual(flat.width, base.width)

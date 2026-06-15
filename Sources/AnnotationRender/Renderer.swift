@@ -70,9 +70,7 @@ public enum Renderer {
         case .rectangle(let e): drawRect(e, in: ctx)
         case .ellipse(let e): drawEllipse(e, in: ctx)
         case .text(let e): drawText(e, in: ctx)
-        case .stamp(let e): drawStamp(e, in: ctx)
         case .pixelate(let e): drawRedaction(e.rect, pixelate: true, amount: e.amount, base: base, canvasSize: canvasSize, in: ctx)
-        case .blur(let e): drawRedaction(e.rect, pixelate: false, amount: e.amount, base: base, canvasSize: canvasSize, in: ctx)
         }
     }
 
@@ -173,13 +171,6 @@ public enum Renderer {
         withYFlip(around: e.boundingBox(), in: ctx) {
             CTFrameDraw(frame, ctx)
         }
-    }
-
-    private static func drawStamp(_ e: StampElement, in ctx: CGContext) {
-        let path = StampPaths.path(for: e.kind, in: e.rect)
-        setFill(ctx, e.color)
-        ctx.addPath(path)
-        ctx.fillPath()
     }
 
     private static func drawRedaction(_ rect: CGRect, pixelate: Bool, amount: CGFloat,

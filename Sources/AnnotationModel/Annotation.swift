@@ -9,9 +9,7 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     case rectangle(ShapeElement)
     case ellipse(ShapeElement)
     case text(TextElement)
-    case stamp(StampElement)
     case pixelate(RedactionElement)
-    case blur(RedactionElement)
 
     public var id: ElementID { geometry.id }
 
@@ -23,9 +21,7 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
         case .rectangle(let e): return e
         case .ellipse(let e): return e
         case .text(let e): return e
-        case .stamp(let e): return e
         case .pixelate(let e): return e
-        case .blur(let e): return e
         }
     }
 
@@ -49,9 +45,7 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
         case .rectangle(var e): var g: AnnotationGeometry = e; body(&g); e = g as! ShapeElement; self = .rectangle(e)
         case .ellipse(var e): var g: AnnotationGeometry = e; body(&g); e = g as! ShapeElement; self = .ellipse(e)
         case .text(var e): var g: AnnotationGeometry = e; body(&g); e = g as! TextElement; self = .text(e)
-        case .stamp(var e): var g: AnnotationGeometry = e; body(&g); e = g as! StampElement; self = .stamp(e)
         case .pixelate(var e): var g: AnnotationGeometry = e; body(&g); e = g as! RedactionElement; self = .pixelate(e)
-        case .blur(var e): var g: AnnotationGeometry = e; body(&g); e = g as! RedactionElement; self = .blur(e)
         }
     }
 }

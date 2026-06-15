@@ -4,6 +4,22 @@ import CoreGraphics
 import AnnotationModel
 import AnnotationRender
 
+private class MinimalTextView: NSTextView {
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard let menu = super.menu(for: event) else { return nil }
+        let blocked: Set<String> = [
+            "orderFrontCharacterPalette:",
+            "startDictation:",
+            "orderFrontSubstitutionsPanel:",
+        ]
+        menu.items.removeAll {
+            guard let action = $0.action else { return false }
+            return blocked.contains(NSStringFromSelector(action))
+        }
+        return menu
+    }
+}
+
 // MARK: - SwiftUI bridge
 
 struct CanvasView: NSViewRepresentable {
@@ -292,12 +308,8 @@ final class CanvasNSView: NSView {
             new = .rectangle(ShapeElement(rect: zeroRect, color: color, width: width))
         case .ellipse:
             new = .ellipse(ShapeElement(rect: zeroRect, color: color, width: width))
-        case .stamp:
-            new = .stamp(StampElement(rect: zeroRect, kind: controller.stampKind, color: color))
         case .pixelate:
             new = .pixelate(RedactionElement(rect: zeroRect, amount: RedactionElement.defaultPixelateAmount))
-        case .blur:
-            new = .blur(RedactionElement(rect: zeroRect, amount: RedactionElement.defaultBlurAmount))
         default:
             return
         }
@@ -400,7 +412,7 @@ final class CanvasNSView: NSView {
               case .text(let text) = element else { return }
         commitTextEditing()
 
-        let tv = NSTextView(frame: viewRect(forModelRect: element.boundingBox()).insetBy(dx: -2, dy: -2))
+        let tv = MinimalTextView(frame: viewRect(forModelRect: element.boundingBox()).insetBy(dx: -2, dy: -2))
         tv.string = text.string
         tv.font = nsFont(for: text.font, scale: displayScale)
         tv.textColor = nsColor(text.color)

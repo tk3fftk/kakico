@@ -94,29 +94,11 @@ public struct TextElement: Codable, Equatable, Sendable, RectGeometry {
     }
 }
 
-// MARK: - Stamp
-
-public enum StampKind: String, Codable, Sendable, CaseIterable {
-    case check, cross, star, exclaim, heart
-}
-
-public struct StampElement: Codable, Equatable, Sendable, RectGeometry {
-    public var id: ElementID
-    public var rect: CGRect
-    public var kind: StampKind
-    public var color: RGBAColor
-
-    public init(id: ElementID = UUID(), rect: CGRect, kind: StampKind = .check, color: RGBAColor = .red) {
-        self.id = id; self.rect = rect; self.kind = kind; self.color = color
-    }
-}
-
 // MARK: - Redaction (pixelate / blur)
 
 public struct RedactionElement: Codable, Equatable, Sendable, RectGeometry {
     /// Default strengths for freshly created redactions.
     public static let defaultPixelateAmount: CGFloat = 14
-    public static let defaultBlurAmount: CGFloat = 12
 
     public var id: ElementID
     public var rect: CGRect

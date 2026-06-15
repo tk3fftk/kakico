@@ -13,7 +13,6 @@ final class CanvasController: ObservableObject {
     @Published var tool: Tool = .arrow
     @Published var strokeColor: RGBAColor = .red
     @Published var strokeWidth: CGFloat = 6
-    @Published var stampKind: StampKind = .check
     @Published private(set) var sourceURL: URL?
 
     /// Undo unit: the document plus the base image (destructive crop swaps the

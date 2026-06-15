@@ -118,50 +118,6 @@ final class AnnotationRenderTests: XCTestCase {
         return ctx.makeImage()!
     }
 
-    func testBlurAltersTexturedRegion() {
-        let base = checkerImage(64)
-        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 64, height: 64))
-        doc.add(.blur(RedactionElement(rect: CGRect(x: 16, y: 16, width: 32, height: 32), amount: 6)))
-        let out = Renderer.flatten(doc, baseImage: base, scale: 1)!
-        // Average the blurred region; blurring a fine 2px black/white checker
-        // must yield a mid-tone, not the original pure black/white extremes.
-        var total = 0, count = 0
-        for y in 22...42 {
-            for x in 22...42 {
-                total += samplePixel(out, x: x, y: y).r
-                count += 1
-            }
-        }
-        let avg = total / count
-        XCTAssertGreaterThan(avg, 50, "blurred region too dark — redaction not averaging")
-        XCTAssertLessThan(avg, 205, "blurred region too light — redaction not averaging")
-    }
-
-    /// Vertically asymmetric redaction: blur only the top quarter and verify
-    /// the effect lands there — not mirrored to the bottom (regression guard
-    /// for the y-flip in the CI region math).
-    func testBlurRegionIsNotVerticallyMirrored() {
-        let base = checkerImage(64)
-        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 64, height: 64))
-        doc.add(.blur(RedactionElement(rect: CGRect(x: 8, y: 4, width: 48, height: 12), amount: 6)))
-        let out = Renderer.flatten(doc, baseImage: base, scale: 1)!
-
-        func rowAverage(_ y: Int) -> Int {
-            var total = 0
-            for x in 16...48 { total += samplePixel(out, x: x, y: y).r }
-            return total / 33
-        }
-        // Inside the blurred band: averaged mid-tone.
-        let inside = rowAverage(10)
-        XCTAssertGreaterThan(inside, 50, "blur did not land in the requested band")
-        XCTAssertLessThan(inside, 205, "blur did not land in the requested band")
-        // Mirrored band near the bottom: untouched checker rows stay extreme.
-        let mirroredBlack = rowAverage(54), mirroredWhite = rowAverage(55)
-        let extreme = min(mirroredBlack, 255 - mirroredWhite) < 20
-            || min(mirroredWhite, 255 - mirroredBlack) < 20
-        XCTAssertTrue(extreme, "bottom band was altered — redaction region mirrored")
-    }
-
     private func samplePixel(_ image: CGImage, x: Int, y: Int) -> (r: Int, g: Int, b: Int) {
         let w = image.width, h = image.height
         var buf = [UInt8](repeating: 0, count: w * h * 4)

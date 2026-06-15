@@ -92,14 +92,6 @@ struct ToolbarBar: View {
                 .frame(width: 90)
             }
 
-            if controller.tool == .stamp {
-                Picker("", selection: $controller.stampKind) {
-                    ForEach(StampKind.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-                }
-                .labelsHidden()
-                .frame(width: 110)
-            }
-
             Spacer()
 
             if controller.document?.crop != nil {
