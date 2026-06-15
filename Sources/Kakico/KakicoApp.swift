@@ -18,6 +18,7 @@ struct KakicoApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = CanvasController()
     private var pasteKeyMonitor: Any?
+    private var editMenuDelegate: EditMenuFilter?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
@@ -35,6 +36,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let controller = self.controller
             DispatchQueue.main.async { ExportService.confirmAndPasteImage(controller) }
             return nil
+        }
+
+        DispatchQueue.main.async {
+            if let editMenu = NSApp.mainMenu?.items.first(where: { $0.title == "Edit" })?.submenu {
+                self.editMenuDelegate = EditMenuFilter()
+                editMenu.delegate = self.editMenuDelegate
+            }
+        }
+    }
+}
+
+private class EditMenuFilter: NSObject, NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        let blockedTitles: Set<String> = [
+            "Writing Tools", "AutoFill",
+            "Start Dictation\u{2026}", "Emoji & Symbols",
+        ]
+        let blockedActions: Set<String> = [
+            "orderFrontCharacterPalette:",
+            "startDictation:",
+            "orderFrontWritingTools:",
+        ]
+        for item in menu.items {
+            guard !item.isSeparatorItem else { continue }
+            if let action = item.action {
+                item.isHidden = blockedActions.contains(NSStringFromSelector(action))
+            } else {
+                item.isHidden = blockedTitles.contains(item.title)
+            }
         }
     }
 }

@@ -5,18 +5,25 @@ import AnnotationModel
 import AnnotationRender
 
 private class MinimalTextView: NSTextView {
-    override func menu(for event: NSEvent) -> NSMenu? {
-        guard let menu = super.menu(for: event) else { return nil }
-        let blocked: Set<String> = [
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        let blockedTitles: Set<String> = [
+            "Writing Tools", "AutoFill",
+            "Start Dictation\u{2026}", "Emoji & Symbols",
+        ]
+        let blockedActions: Set<String> = [
             "orderFrontCharacterPalette:",
             "startDictation:",
-            "orderFrontSubstitutionsPanel:",
+            "orderFrontWritingTools:",
         ]
-        menu.items.removeAll {
-            guard let action = $0.action else { return false }
-            return blocked.contains(NSStringFromSelector(action))
+        menu.items.removeAll { item in
+            if let action = item.action {
+                return blockedActions.contains(NSStringFromSelector(action))
+            }
+            return blockedTitles.contains(item.title)
         }
-        return menu
+        while menu.items.last?.isSeparatorItem == true { menu.removeItem(at: menu.items.count - 1) }
+        while menu.items.first?.isSeparatorItem == true { menu.removeItem(at: 0) }
     }
 }
 
