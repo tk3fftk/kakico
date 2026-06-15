@@ -104,7 +104,7 @@ public struct RedactionElement: Codable, Equatable, Sendable, RectGeometry {
     public var rect: CGRect
     public var amount: CGFloat        // pixel block size
 
-    public init(id: ElementID = UUID(), rect: CGRect, amount: CGFloat = 16) {
+    public init(id: ElementID = UUID(), rect: CGRect, amount: CGFloat = Self.defaultPixelateAmount) {
         self.id = id; self.rect = rect; self.amount = amount
     }
 }
