@@ -1,6 +1,16 @@
 import SwiftUI
 import AppKit
 
+let blockedMenuTitles: Set<String> = [
+    "Writing Tools", "AutoFill",
+    "Start Dictation\u{2026}", "Emoji & Symbols",
+]
+let blockedMenuActions: Set<String> = [
+    "orderFrontCharacterPalette:",
+    "startDictation:",
+    "orderFrontWritingTools:",
+]
+
 @main
 struct KakicoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -49,21 +59,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 private class EditMenuFilter: NSObject, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
-        let blockedTitles: Set<String> = [
-            "Writing Tools", "AutoFill",
-            "Start Dictation\u{2026}", "Emoji & Symbols",
-        ]
-        let blockedActions: Set<String> = [
-            "orderFrontCharacterPalette:",
-            "startDictation:",
-            "orderFrontWritingTools:",
-        ]
         for item in menu.items {
             guard !item.isSeparatorItem else { continue }
             if let action = item.action {
-                item.isHidden = blockedActions.contains(NSStringFromSelector(action))
+                item.isHidden = blockedMenuActions.contains(NSStringFromSelector(action))
             } else {
-                item.isHidden = blockedTitles.contains(item.title)
+                item.isHidden = blockedMenuTitles.contains(item.title)
             }
         }
     }

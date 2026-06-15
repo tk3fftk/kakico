@@ -70,7 +70,7 @@ public enum Renderer {
         case .rectangle(let e): drawRect(e, in: ctx)
         case .ellipse(let e): drawEllipse(e, in: ctx)
         case .text(let e): drawText(e, in: ctx)
-        case .pixelate(let e): drawRedaction(e.rect, pixelate: true, amount: e.amount, base: base, canvasSize: canvasSize, in: ctx)
+        case .pixelate(let e): drawRedaction(e.rect, amount: e.amount, base: base, canvasSize: canvasSize, in: ctx)
         }
     }
 
@@ -173,7 +173,7 @@ public enum Renderer {
         }
     }
 
-    private static func drawRedaction(_ rect: CGRect, pixelate: Bool, amount: CGFloat,
+    private static func drawRedaction(_ rect: CGRect, amount: CGFloat,
                                       base: CGImage?, canvasSize: CGSize, in ctx: CGContext) {
         guard let base, rect.width > 1, rect.height > 1 else {
             // Fallback: opaque gray block if no base image is available.
@@ -186,15 +186,10 @@ public enum Renderer {
         let flippedY = canvasSize.height - rect.maxY
         let ciRect = CGRect(x: rect.minX, y: flippedY, width: rect.width, height: rect.height)
 
-        let (name, amountKey, minAmount) = pixelate
-            ? ("CIPixellate", kCIInputScaleKey, CGFloat(2))
-            : ("CIGaussianBlur", kCIInputRadiusKey, CGFloat(1))
-        let f = CIFilter(name: name)!
+        let f = CIFilter(name: "CIPixellate")!
         f.setValue(ciImage.clampedToExtent(), forKey: kCIInputImageKey)
-        f.setValue(max(minAmount, amount), forKey: amountKey)
-        if pixelate {
-            f.setValue(CIVector(x: ciRect.midX, y: ciRect.midY), forKey: kCIInputCenterKey)
-        }
+        f.setValue(max(2, amount), forKey: kCIInputScaleKey)
+        f.setValue(CIVector(x: ciRect.midX, y: ciRect.midY), forKey: kCIInputCenterKey)
         let cropped = f.outputImage!.cropped(to: ciRect)
         guard let out = ciContext.createCGImage(cropped, from: ciRect) else { return }
         drawImage(out, in: rect, ctx: ctx)
