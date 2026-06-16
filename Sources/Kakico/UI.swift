@@ -139,7 +139,7 @@ struct DragOutWell: NSViewRepresentable {
 
 final class DragOutView: NSView, NSFilePromiseProviderDelegate, NSDraggingSource {
     weak var controller: CanvasController?
-    private var pendingData: Data?
+    nonisolated(unsafe) private var pendingData: Data?
     private let ioQueue = OperationQueue()
 
     override init(frame frameRect: NSRect) {
