@@ -20,7 +20,7 @@ func rgbaColor(from color: Color) -> RGBAColor {
 // MARK: - Content
 
 struct ContentView: View {
-    @ObservedObject var controller: CanvasController
+    var controller: CanvasController
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,7 +37,7 @@ struct ContentView: View {
 }
 
 struct EmptyState: View {
-    @ObservedObject var controller: CanvasController
+    var controller: CanvasController
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "photo.on.rectangle.angled")
@@ -57,7 +57,7 @@ struct EmptyState: View {
 // MARK: - Toolbar
 
 struct ToolbarBar: View {
-    @ObservedObject var controller: CanvasController
+    var controller: CanvasController
 
     private var colorBinding: Binding<Color> {
         Binding(get: { Color(controller.strokeColor) },
@@ -125,7 +125,7 @@ struct ToolbarBar: View {
 // MARK: - Drag-out well (NSFilePromiseProvider)
 
 struct DragOutWell: NSViewRepresentable {
-    @ObservedObject var controller: CanvasController
+    var controller: CanvasController
 
     func makeNSView(context: Context) -> DragOutView {
         let v = DragOutView()

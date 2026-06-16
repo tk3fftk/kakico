@@ -82,7 +82,7 @@ private class EditMenuFilter: NSObject, NSMenuDelegate {
 }
 
 struct AppCommands: Commands {
-    @ObservedObject var controller: CanvasController
+    var controller: CanvasController
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {

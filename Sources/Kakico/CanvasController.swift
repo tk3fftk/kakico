@@ -5,15 +5,15 @@ import AnnotationModel
 
 /// Holds the document, the loaded base image, the current tool/selection, and
 /// a snapshot-based undo stack. The single source of truth for the UI.
-@MainActor
-final class CanvasController: ObservableObject {
-    @Published var document: Document?
-    @Published var baseImage: CGImage?
-    @Published var selection: ElementID?
-    @Published var tool: Tool = .arrow
-    @Published var strokeColor: RGBAColor = .red
-    @Published var strokeWidth: CGFloat = 6
-    @Published private(set) var sourceURL: URL?
+@MainActor @Observable
+final class CanvasController {
+    var document: Document?
+    var baseImage: CGImage?
+    var selection: ElementID?
+    var tool: Tool = .arrow
+    var strokeColor: RGBAColor = .red
+    var strokeWidth: CGFloat = 6
+    private(set) var sourceURL: URL?
 
     /// Undo unit: the document plus the base image (destructive crop swaps the
     /// image, so document snapshots alone can't restore it).
@@ -83,7 +83,6 @@ final class CanvasController: ObservableObject {
         guard let pre = interactionSnapshot, pre.document != document else { return }
         undoStack.append(pre)
         redoStack.removeAll()
-        objectWillChange.send()
     }
 
     /// One-shot mutation with undo registration.

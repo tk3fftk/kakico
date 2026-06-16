@@ -21,7 +21,7 @@ private class MinimalTextView: NSTextView {
 // MARK: - SwiftUI bridge
 
 struct CanvasView: NSViewRepresentable {
-    @ObservedObject var controller: CanvasController
+    var controller: CanvasController
 
     func makeNSView(context: Context) -> CanvasNSView {
         let view = CanvasNSView()
