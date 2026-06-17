@@ -237,36 +237,45 @@ final class CanvasNSView: NSView {
 
         switch controller.tool {
         case .select:
-            handleSelectMouseDown(at: p, viewPoint: viewPoint)
+            handleSelectMouseDown(at: p)
         case .crop:
             handleCropMouseDown(at: p, viewPoint: viewPoint)
-        case .text:
-            createText(at: p)
         default:
-            createElement(tool: controller.tool, at: p)
+            handleCreationMouseDown(tool: controller.tool, at: p)
         }
         refresh()
     }
 
-    private func handleSelectMouseDown(at p: CGPoint, viewPoint: CGPoint) {
+    private func handleSelectMouseDown(at p: CGPoint) {
         guard let controller, let doc = controller.document else { return }
-        // Handle grab on the current selection first.
-        if let sel = controller.selection, let element = doc.elements.first(where: { $0.id == sel }) {
-            for handle in element.handles() {
-                if hypot(modelToView(handle.position).x - viewPoint.x,
-                         modelToView(handle.position).y - viewPoint.y) <= 8 {
-                    drag = .handle(sel, handle.role)
-                    return
-                }
-            }
-        }
-        // Otherwise select / start moving the topmost hit element.
-        if let hit = doc.hitTest(p, tolerance: modelTolerance) {
-            controller.selection = hit
-            drag = .moving(hit, last: p)
-        } else {
+        switch doc.resolvePointer(at: p, selection: controller.selection,
+                                  bodyTolerance: modelTolerance, handleTolerance: modelTolerance) {
+        case .handle(let id, let role):
+            drag = .handle(id, role)
+        case .body(let id):
+            controller.selection = id
+            drag = .moving(id, last: p)
+        case .empty:
             controller.selection = nil
             drag = .none
+        }
+    }
+
+    /// Creation tools also let you grab an existing object: a handle on the
+    /// current selection resizes, a body hit selects and moves, and only empty
+    /// space creates a new element. The active tool is never changed.
+    private func handleCreationMouseDown(tool: Tool, at p: CGPoint) {
+        guard let controller, let doc = controller.document else { return }
+        switch doc.resolvePointer(at: p, selection: controller.selection,
+                                  bodyTolerance: modelTolerance, handleTolerance: modelTolerance) {
+        case .handle(let id, let role):
+            controller.selection = id
+            drag = .handle(id, role)
+        case .body(let id):
+            controller.selection = id
+            drag = .moving(id, last: p)
+        case .empty:
+            if tool == .text { createText(at: p) } else { createElement(tool: tool, at: p) }
         }
     }
 
