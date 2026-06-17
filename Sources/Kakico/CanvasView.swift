@@ -237,16 +237,20 @@ final class CanvasNSView: NSView {
 
         switch controller.tool {
         case .select:
-            handleSelectMouseDown(at: p)
+            handlePointerMouseDown(at: p, creationTool: nil)
         case .crop:
             handleCropMouseDown(at: p, viewPoint: viewPoint)
         default:
-            handleCreationMouseDown(tool: controller.tool, at: p)
+            handlePointerMouseDown(at: p, creationTool: controller.tool)
         }
         refresh()
     }
 
-    private func handleSelectMouseDown(at p: CGPoint) {
+    /// Shared pointer handling for `select` and creation tools. A handle on the
+    /// current selection resizes; a body hit selects and moves. On empty space
+    /// `select` clears the selection, while a creation tool creates a new element.
+    /// The active tool is never changed.
+    private func handlePointerMouseDown(at p: CGPoint, creationTool: Tool?) {
         guard let controller, let doc = controller.document else { return }
         switch doc.resolvePointer(at: p, selection: controller.selection,
                                   bodyTolerance: modelTolerance, handleTolerance: modelTolerance) {
@@ -256,25 +260,11 @@ final class CanvasNSView: NSView {
             controller.selection = id
             drag = .moving(id, last: p)
         case .empty:
-            controller.selection = nil
-            drag = .none
-        }
-    }
-
-    /// Creation tools also let you grab an existing object: a handle on the
-    /// current selection resizes, a body hit selects and moves, and only empty
-    /// space creates a new element. The active tool is never changed.
-    private func handleCreationMouseDown(tool: Tool, at p: CGPoint) {
-        guard let controller, let doc = controller.document else { return }
-        switch doc.resolvePointer(at: p, selection: controller.selection,
-                                  bodyTolerance: modelTolerance, handleTolerance: modelTolerance) {
-        case .handle(let id, let role):
-            controller.selection = id
-            drag = .handle(id, role)
-        case .body(let id):
-            controller.selection = id
-            drag = .moving(id, last: p)
-        case .empty:
+            guard let tool = creationTool else {
+                controller.selection = nil
+                drag = .none
+                return
+            }
             if tool == .text { createText(at: p) } else { createElement(tool: tool, at: p) }
         }
     }
