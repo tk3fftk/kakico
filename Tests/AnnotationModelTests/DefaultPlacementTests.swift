@@ -31,8 +31,8 @@ final class DefaultPlacementTests: XCTestCase {
     func testDegenerateRectIsCenteredDefaultSize() {
         let result = Annotation.rectangle(ShapeElement(rect: CGRect(corner: p, p))).applyingDefaultInitialSize()
         guard case .rectangle(let e) = result else { return XCTFail("kind changed") }
-        XCTAssertEqual(e.rect.width, DefaultInitialSize.rect.width, accuracy: acc)
-        XCTAssertEqual(e.rect.height, DefaultInitialSize.rect.height, accuracy: acc)
+        XCTAssertEqual(e.rect.width, DefaultInitialSize.size.width, accuracy: acc)
+        XCTAssertEqual(e.rect.height, DefaultInitialSize.size.height, accuracy: acc)
         XCTAssertEqual(e.rect.midX, p.x, accuracy: acc)
         XCTAssertEqual(e.rect.midY, p.y, accuracy: acc)
     }
@@ -40,11 +40,11 @@ final class DefaultPlacementTests: XCTestCase {
     func testDegenerateEllipseAndPixelateGetDefaultSize() {
         let ell = Annotation.ellipse(ShapeElement(rect: CGRect(corner: p, p))).applyingDefaultInitialSize()
         guard case .ellipse(let e) = ell else { return XCTFail("kind changed") }
-        XCTAssertEqual(e.rect.width, DefaultInitialSize.rect.width, accuracy: acc)
+        XCTAssertEqual(e.rect.width, DefaultInitialSize.size.width, accuracy: acc)
 
         let pix = Annotation.pixelate(RedactionElement(rect: CGRect(corner: p, p))).applyingDefaultInitialSize()
         guard case .pixelate(let r) = pix else { return XCTFail("kind changed") }
-        XCTAssertEqual(r.rect.width, DefaultInitialSize.rect.width, accuracy: acc)
+        XCTAssertEqual(r.rect.width, DefaultInitialSize.size.width, accuracy: acc)
         XCTAssertEqual(r.rect.midY, p.y, accuracy: acc)
     }
 

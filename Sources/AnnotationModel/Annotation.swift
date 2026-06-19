@@ -34,34 +34,32 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     /// the object appears without a drag. Non-degenerate (drag-created)
     /// elements and text (already placed at a default size) are unchanged.
     public func applyingDefaultInitialSize() -> Annotation {
-        // Degeneracy is judged on raw geometry (not boundingBox, whose -width
-        // inset would make a zero-length segment look non-degenerate).
         switch self {
-        case .arrow(var e):
-            guard hypot(e.end.x - e.start.x, e.end.y - e.start.y) < 3 else { return self }
-            e.end = CGPoint(x: e.start.x + DefaultInitialSize.segment.dx,
-                            y: e.start.y + DefaultInitialSize.segment.dy)
-            return .arrow(e)
-        case .line(var e):
-            guard hypot(e.end.x - e.start.x, e.end.y - e.start.y) < 3 else { return self }
-            e.end = CGPoint(x: e.start.x + DefaultInitialSize.segment.dx,
-                            y: e.start.y + DefaultInitialSize.segment.dy)
-            return .line(e)
-        case .rectangle(var e):
-            guard e.rect.width < 3, e.rect.height < 3 else { return self }
-            e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
-            return .rectangle(e)
-        case .ellipse(var e):
-            guard e.rect.width < 3, e.rect.height < 3 else { return self }
-            e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
-            return .ellipse(e)
-        case .pixelate(var e):
-            guard e.rect.width < 3, e.rect.height < 3 else { return self }
-            e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
-            return .pixelate(e)
-        case .text:
-            return self
+        case .arrow(let e):     return .arrow(Self.defaultSized(e))
+        case .line(let e):      return .line(Self.defaultSized(e))
+        case .rectangle(let e): return .rectangle(Self.defaultSized(e))
+        case .ellipse(let e):   return .ellipse(Self.defaultSized(e))
+        case .pixelate(let e):  return .pixelate(Self.defaultSized(e))
+        case .text:             return self   // already placed at a default size
         }
+    }
+
+    // Degeneracy is judged on raw geometry (not boundingBox, whose -width inset
+    // would make a zero-length segment look non-degenerate).
+    private static func defaultSized(_ e: SegmentElement) -> SegmentElement {
+        guard hypot(e.end.x - e.start.x, e.end.y - e.start.y) < DefaultInitialSize.degenerateThreshold else { return e }
+        var e = e
+        e.end = CGPoint(x: e.start.x + DefaultInitialSize.segment.dx,
+                        y: e.start.y + DefaultInitialSize.segment.dy)
+        return e
+    }
+
+    private static func defaultSized<T: RectGeometry>(_ e: T) -> T {
+        guard e.rect.width < DefaultInitialSize.degenerateThreshold,
+              e.rect.height < DefaultInitialSize.degenerateThreshold else { return e }
+        var e = e
+        e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
+        return e
     }
 
     public mutating func moveHandle(_ role: HandleRole, to point: CGPoint) {

@@ -50,15 +50,18 @@ public enum ImageRef: Codable, Equatable, Sendable {
 
 /// Default geometry for click-to-place (no-drag) object creation, Skitch-style.
 public enum DefaultInitialSize {
+    /// Raw extent below which a freshly created element counts as a plain click
+    /// (no real drag) and gets a default size instead.
+    public static let degenerateThreshold: CGFloat = 3
     /// Tail→head vector for a freshly placed arrow/line (down-right).
     public static let segment = CGVector(dx: 100, dy: 70)
     /// Default box for a freshly placed rectangle/ellipse/pixelate.
-    public static let rect = CGSize(width: 120, height: 90)
+    public static let size = CGSize(width: 120, height: 90)
 
     /// The default box centered on the click point.
     public static func rect(centeredOn point: CGPoint) -> CGRect {
-        CGRect(x: point.x - rect.width / 2, y: point.y - rect.height / 2,
-               width: rect.width, height: rect.height)
+        CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
+               width: size.width, height: size.height)
     }
 }
 

@@ -37,8 +37,8 @@ public struct SegmentElement: Codable, Equatable, Sendable, AnnotationGeometry {
     /// barbLower], or `[]` for a degenerate (zero-length) arrow.
     public func arrowOutline() -> [CGPoint] {
         let dx = end.x - start.x, dy = end.y - start.y
-        let length = (dx * dx + dy * dy).squareRoot()
-        guard length > 0.5 else { return [] }
+        let length = hypot(dx, dy)
+        guard length > 0.5 else { return [] }   // rendering floor
 
         let ux = dx / length, uy = dy / length      // axis unit vector
         let px = -uy, py = ux                        // perpendicular unit vector
