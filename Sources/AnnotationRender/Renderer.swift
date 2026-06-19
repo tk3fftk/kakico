@@ -112,25 +112,13 @@ public enum Renderer {
     }
 
     private static func drawArrow(_ e: SegmentElement, in ctx: CGContext) {
-        setStroke(ctx, e.color, e.width)
-        // Shaft
-        ctx.beginPath()
-        ctx.move(to: e.start)
-        ctx.addLine(to: e.end)
-        ctx.strokePath()
-        // Head
-        let angle = atan2(e.end.y - e.start.y, e.end.x - e.start.x)
-        let headLength = max(14, e.width * 3.2)
-        let spread = CGFloat.pi / 7
-        let p1 = CGPoint(x: e.end.x - headLength * cos(angle - spread),
-                         y: e.end.y - headLength * sin(angle - spread))
-        let p2 = CGPoint(x: e.end.x - headLength * cos(angle + spread),
-                         y: e.end.y - headLength * sin(angle + spread))
+        // Skitch-style arrow: one filled polygon (tapered shaft + barbed head).
+        let outline = e.arrowOutline()
+        guard let first = outline.first else { return }
         setFill(ctx, e.color)
         ctx.beginPath()
-        ctx.move(to: e.end)
-        ctx.addLine(to: p1)
-        ctx.addLine(to: p2)
+        ctx.move(to: first)
+        for p in outline.dropFirst() { ctx.addLine(to: p) }
         ctx.closePath()
         ctx.fillPath()
     }

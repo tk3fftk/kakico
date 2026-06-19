@@ -29,6 +29,41 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     public func hitTest(_ p: CGPoint, tolerance: CGFloat) -> Bool { geometry.hitTest(p, tolerance: tolerance) }
     public func handles() -> [Handle] { geometry.handles() }
 
+    /// Skitch-style placement: a plain click drops a degenerate (zero-size)
+    /// element; give it a sensible default size anchored at the click point so
+    /// the object appears without a drag. Non-degenerate (drag-created)
+    /// elements and text (already placed at a default size) are unchanged.
+    public func applyingDefaultInitialSize() -> Annotation {
+        // Degeneracy is judged on raw geometry (not boundingBox, whose -width
+        // inset would make a zero-length segment look non-degenerate).
+        switch self {
+        case .arrow(var e):
+            guard hypot(e.end.x - e.start.x, e.end.y - e.start.y) < 3 else { return self }
+            e.end = CGPoint(x: e.start.x + DefaultInitialSize.segment.dx,
+                            y: e.start.y + DefaultInitialSize.segment.dy)
+            return .arrow(e)
+        case .line(var e):
+            guard hypot(e.end.x - e.start.x, e.end.y - e.start.y) < 3 else { return self }
+            e.end = CGPoint(x: e.start.x + DefaultInitialSize.segment.dx,
+                            y: e.start.y + DefaultInitialSize.segment.dy)
+            return .line(e)
+        case .rectangle(var e):
+            guard e.rect.width < 3, e.rect.height < 3 else { return self }
+            e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
+            return .rectangle(e)
+        case .ellipse(var e):
+            guard e.rect.width < 3, e.rect.height < 3 else { return self }
+            e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
+            return .ellipse(e)
+        case .pixelate(var e):
+            guard e.rect.width < 3, e.rect.height < 3 else { return self }
+            e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
+            return .pixelate(e)
+        case .text:
+            return self
+        }
+    }
+
     public mutating func moveHandle(_ role: HandleRole, to point: CGPoint) {
         mutate { $0.moveHandle(role, to: point) }
     }

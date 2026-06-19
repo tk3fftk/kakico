@@ -48,6 +48,20 @@ public enum ImageRef: Codable, Equatable, Sendable {
     case pngData(Data)
 }
 
+/// Default geometry for click-to-place (no-drag) object creation, Skitch-style.
+public enum DefaultInitialSize {
+    /// Tail→head vector for a freshly placed arrow/line (down-right).
+    public static let segment = CGVector(dx: 100, dy: 70)
+    /// Default box for a freshly placed rectangle/ellipse/pixelate.
+    public static let rect = CGSize(width: 120, height: 90)
+
+    /// The default box centered on the click point.
+    public static func rect(centeredOn point: CGPoint) -> CGRect {
+        CGRect(x: point.x - rect.width / 2, y: point.y - rect.height / 2,
+               width: rect.width, height: rect.height)
+    }
+}
+
 public enum GeometryMath {
     /// Shortest distance from point `p` to the line segment `a`–`b`.
     public static func distance(from p: CGPoint, toSegment a: CGPoint, _ b: CGPoint) -> CGFloat {
