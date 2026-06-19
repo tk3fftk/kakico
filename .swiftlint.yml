@@ -1,0 +1,40 @@
+# SwiftLint configuration for Kakico
+
+# Rules to disable
+disabled_rules:
+  - trailing_comma # Project style uses trailing commas
+  - force_cast # Intentional in Annotation.mutate pattern
+  - large_tuple # Used for geometry utilities
+
+# Rule configurations
+identifier_name:
+  min_length:
+    warning: 1
+    error: 1
+  max_length:
+    warning: 60
+    error: 80
+
+line_length:
+  warning: 150
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+file_length:
+  warning: 600
+  error: 1000
+
+type_body_length:
+  warning: 400
+  error: 600
+
+# Paths to include
+included:
+  - Sources
+  - Tests
+
+# Paths to exclude
+excluded:
+  - .build
+  - build

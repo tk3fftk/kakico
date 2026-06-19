@@ -70,13 +70,19 @@ private class EditMenuFilter: NSObject, NSMenuDelegate {
         }
         var trailingEdge = true
         for item in menu.items.reversed() {
-            if trailingEdge, item.isSeparatorItem { item.isHidden = true }
-            else if !item.isHidden { trailingEdge = false }
+            if trailingEdge, item.isSeparatorItem {
+                item.isHidden = true
+            } else if !item.isHidden {
+                trailingEdge = false
+            }
         }
         var leadingEdge = true
         for item in menu.items {
-            if leadingEdge, item.isSeparatorItem { item.isHidden = true }
-            else if !item.isHidden { leadingEdge = false }
+            if leadingEdge, item.isSeparatorItem {
+                item.isHidden = true
+            } else if !item.isHidden {
+                leadingEdge = false
+            }
         }
     }
 }

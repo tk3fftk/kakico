@@ -1,0 +1,25 @@
+name: SwiftLint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  swiftlint:
+    name: SwiftLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Download SwiftLint
+        run: |
+          SWIFTLINT_VERSION="0.63.3"
+          curl -sL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux_amd64.zip" -o /tmp/swiftlint.zip
+          unzip -o /tmp/swiftlint.zip -d /tmp/swiftlint
+          chmod +x /tmp/swiftlint/swiftlint
+      - name: Run SwiftLint
+        run: /tmp/swiftlint/swiftlint --strict --reporter github-actions-logging
