@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Create|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILES=$(git diff --name-only HEAD 2>/dev/null | grep '\\.swift$'); if [ -n \"$FILES\" ]; then swiftlint lint --strict $FILES; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
