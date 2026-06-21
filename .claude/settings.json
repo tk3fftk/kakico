@@ -2,11 +2,11 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Create|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "FILES=$(git diff --name-only HEAD 2>/dev/null | grep '\\.swift$'); if [ -n \"$FILES\" ]; then swiftlint lint --strict $FILES; fi"
+            "command": "FILES=$({ git diff --name-only HEAD 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | grep '\\.swift$'); if [ -n \"$FILES\" ]; then echo \"$FILES\" | xargs swiftlint lint --strict; fi"
           }
         ]
       }
