@@ -6,18 +6,32 @@ on:
 permissions:
   contents: read
 
+env:
+  SWIFTLINT_VERSION: "0.63.3"
+  SWIFTLINT_SHA256: "26db741d43f2f2dc26c0cf16911100a3e186c3d1dbb59e55ad3ac87b0de4538f"
+
 jobs:
   swiftlint:
     name: SwiftLint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Cache SwiftLint binary
+        id: cache-swiftlint
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: /tmp/swiftlint
+          key: swiftlint-${{ env.SWIFTLINT_VERSION }}-linux-amd64
+
       - name: Download SwiftLint
+        if: steps.cache-swiftlint.outputs.cache-hit != 'true'
         run: |
-          SWIFTLINT_VERSION="0.63.3"
           curl -sL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux_amd64.zip" -o /tmp/swiftlint.zip
+          echo "${SWIFTLINT_SHA256}  /tmp/swiftlint.zip" | sha256sum -c
           unzip -o /tmp/swiftlint.zip -d /tmp/swiftlint
           chmod +x /tmp/swiftlint/swiftlint
+
       - name: Run SwiftLint
         run: /tmp/swiftlint/swiftlint --strict --reporter github-actions-logging
