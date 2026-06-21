@@ -55,8 +55,7 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     }
 
     private static func defaultSized<T: RectGeometry>(_ e: T) -> T {
-        guard e.rect.width < DefaultInitialSize.degenerateThreshold,
-              e.rect.height < DefaultInitialSize.degenerateThreshold else { return e }
+        guard max(e.rect.width, e.rect.height) < DefaultInitialSize.degenerateThreshold else { return e }
         var e = e
         e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
         return e
