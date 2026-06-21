@@ -19,14 +19,20 @@ public extension Document {
     /// actually draws.
     func resolvePointer(at point: CGPoint, selection: ElementID?,
                         bodyTolerance: CGFloat, handleTolerance: CGFloat) -> PointerTarget {
-        if let sel = selection, let element = elements.first(where: { $0.id == sel }) {
+        let selected = selection.flatMap { sel in elements.first(where: { $0.id == sel }) }
+        if let element = selected {
             for handle in element.handles()
-            where hypot(handle.position.x - point.x, handle.position.y - point.y) <= handleTolerance {
-                return .handle(sel, handle.role)
+            where GeometryMath.distance(from: handle.position, to: point) <= handleTolerance {
+                return .handle(element.id, handle.role)
             }
         }
         if let hit = hitTest(point, tolerance: bodyTolerance) {
             return .body(hit)
+        }
+        // Clicking inside the selection frame (the dashed bounding box) moves the
+        // selected element, even over the empty interior of an unfilled shape.
+        if let element = selected, element.boundingBox().contains(point) {
+            return .body(element.id)
         }
         return .empty
     }

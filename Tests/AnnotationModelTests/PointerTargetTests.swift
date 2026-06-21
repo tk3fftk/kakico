@@ -55,6 +55,26 @@ final class PointerTargetTests: XCTestCase {
         XCTAssertEqual(target, .empty)
     }
 
+    /// The empty interior of an unfilled (stroked) shape is not a geometry hit,
+    /// but clicking inside the selection frame still moves the selected element.
+    func testResolvePointerBodyHitViaSelectionFrame() {
+        let rect = Annotation.rectangle(ShapeElement(rect: CGRect(x: 0, y: 0, width: 100, height: 100), width: 6))
+        let doc = makeDoc([rect])
+        let target = doc.resolvePointer(at: CGPoint(x: 50, y: 50), selection: rect.id,
+                                        bodyTolerance: 8, handleTolerance: 8)
+        XCTAssertEqual(target, .body(rect.id))
+    }
+
+    /// The same interior point resolves to empty when the shape is not selected —
+    /// the frame fallback applies only to the current selection.
+    func testResolvePointerInteriorEmptyWhenNotSelected() {
+        let rect = Annotation.rectangle(ShapeElement(rect: CGRect(x: 0, y: 0, width: 100, height: 100), width: 6))
+        let doc = makeDoc([rect])
+        let target = doc.resolvePointer(at: CGPoint(x: 50, y: 50), selection: nil,
+                                        bodyTolerance: 8, handleTolerance: 8)
+        XCTAssertEqual(target, .empty)
+    }
+
     /// Overlapping bodies resolve to the topmost (front-to-back) element.
     func testResolvePointerTopmostBody() {
         let bottom = Annotation.rectangle(ShapeElement(rect: CGRect(x: 0, y: 0, width: 100, height: 100), fill: .blue))

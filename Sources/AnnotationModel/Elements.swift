@@ -30,6 +30,39 @@ public struct SegmentElement: Codable, Equatable, Sendable, AnnotationGeometry {
         [Handle(role: .start, position: start), Handle(role: .end, position: end)]
     }
 
+    /// Skitch-style arrow outline: a single filled polygon with a pointed tail,
+    /// a shaft that tapers toward the head, and a wide head with backward barbs
+    /// and a concave notch. Whole shape scales with `width`. Returns the 6
+    /// points in winding order [tip, barbUpper, notchUpper, tail, notchLower,
+    /// barbLower], or `[]` for a degenerate (zero-length) arrow.
+    public func arrowOutline() -> [CGPoint] {
+        let dx = end.x - start.x, dy = end.y - start.y
+        let length = hypot(dx, dy)
+        guard length > 0.5 else { return [] }   // rendering floor
+
+        let ux = dx / length, uy = dy / length      // axis unit vector
+        let px = -uy, py = ux                        // perpendicular unit vector
+
+        let shaftHalf = max(1, width * 0.5)          // shaft half-width at the head base
+        let headHalf = max(shaftHalf * 2.4, width * 1.8) // barb half-span
+        let headLen = min(max(width * 4.0, 14), length * 0.85)
+        let notch = headLen * 0.30                    // concave inset toward the tip
+        let baseX = length - headLen
+        let notchX = baseX + notch
+
+        func pt(_ t: CGFloat, _ o: CGFloat) -> CGPoint {
+            CGPoint(x: start.x + ux * t + px * o, y: start.y + uy * t + py * o)
+        }
+        return [
+            pt(length, 0),       // tip
+            pt(baseX, headHalf), // upper barb
+            pt(notchX, shaftHalf), // upper notch
+            pt(0, 0),            // tail
+            pt(notchX, -shaftHalf), // lower notch
+            pt(baseX, -headHalf),   // lower barb
+        ]
+    }
+
     public mutating func moveHandle(_ role: HandleRole, to point: CGPoint) {
         switch role {
         case .start: start = point
