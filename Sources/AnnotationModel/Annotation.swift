@@ -47,7 +47,7 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     // Degeneracy is judged on raw geometry (not boundingBox, whose -width inset
     // would make a zero-length segment look non-degenerate).
     private static func defaultSized(_ e: SegmentElement) -> SegmentElement {
-        guard hypot(e.end.x - e.start.x, e.end.y - e.start.y) < DefaultInitialSize.degenerateThreshold else { return e }
+        guard GeometryMath.distance(from: e.start, to: e.end) < DefaultInitialSize.degenerateThreshold else { return e }
         var e = e
         e.end = CGPoint(x: e.start.x + DefaultInitialSize.segment.dx,
                         y: e.start.y + DefaultInitialSize.segment.dy)

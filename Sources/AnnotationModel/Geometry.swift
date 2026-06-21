@@ -66,6 +66,11 @@ public enum DefaultInitialSize {
 }
 
 public enum GeometryMath {
+    /// Euclidean distance between two points.
+    public static func distance(from p: CGPoint, to q: CGPoint) -> CGFloat {
+        hypot(q.x - p.x, q.y - p.y)
+    }
+
     /// Shortest distance from point `p` to the line segment `a`–`b`.
     public static func distance(from p: CGPoint, toSegment a: CGPoint, _ b: CGPoint) -> CGFloat {
         let dx = b.x - a.x
