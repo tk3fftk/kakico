@@ -77,36 +77,41 @@ final class CanvasNSView: NSView {
 
     // MARK: Coordinate mapping
 
+    private var displayDocument: Document? {
+        guard var doc = controller?.document else { return nil }
+        doc.crop = nil
+        return doc
+    }
+
     private var effectiveCanvasRect: CGRect {
-        guard let controller, let doc = controller.document else {
+        guard let controller, let doc = displayDocument else {
             return CGRect(origin: .zero, size: .zero)
         }
-        var displayDoc = doc
-        displayDoc.crop = nil
-        return displayDoc.outputRect(for: controller.exportBounds)
+        return doc.outputRect(for: controller.exportBounds)
     }
 
-    private var displayScale: CGFloat {
-        let eff = effectiveCanvasRect
-        guard eff.width > 0, eff.height > 0 else { return 1 }
-        return min(bounds.width / eff.width, bounds.height / eff.height)
+    private var displayInfo: (canvas: CGRect, scale: CGFloat, rect: CGRect) {
+        let canvas = effectiveCanvasRect
+        guard canvas.width > 0, canvas.height > 0 else {
+            return (canvas, 1, .zero)
+        }
+        let scale = min(bounds.width / canvas.width, bounds.height / canvas.height)
+        let w = canvas.width * scale, h = canvas.height * scale
+        let rect = CGRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h)
+        return (canvas, scale, rect)
     }
 
-    private var displayRect: CGRect {
-        let eff = effectiveCanvasRect
-        let scale = displayScale
-        let w = eff.width * scale, h = eff.height * scale
-        return CGRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h)
-    }
+    private var displayScale: CGFloat { displayInfo.scale }
+    private var displayRect: CGRect { displayInfo.rect }
 
     private func modelToView(_ p: CGPoint) -> CGPoint {
-        let r = displayRect, scale = displayScale, eff = effectiveCanvasRect
+        let (eff, scale, r) = displayInfo
         return CGPoint(x: r.minX + (p.x - eff.origin.x) * scale,
                        y: r.minY + (eff.height - (p.y - eff.origin.y)) * scale)
     }
 
     private func viewToModel(_ p: CGPoint) -> CGPoint {
-        let r = displayRect, scale = displayScale, eff = effectiveCanvasRect
+        let (eff, scale, r) = displayInfo
         guard scale > 0 else { return .zero }
         return CGPoint(x: eff.origin.x + (p.x - r.minX) / scale,
                        y: eff.origin.y + eff.height - (p.y - r.minY) / scale)
@@ -123,10 +128,8 @@ final class CanvasNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext,
-              let controller, let doc = controller.document else { return }
-
-        var displayDoc = doc
-        displayDoc.crop = nil
+              let controller, let doc = controller.document,
+              let displayDoc = displayDocument else { return }
         let bounds = controller.exportBounds
         if flattened == nil || flattenedKey != displayDoc || flattenedBase !== controller.baseImage || flattenedBounds != bounds {
             flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1,

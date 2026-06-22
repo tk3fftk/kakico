@@ -48,7 +48,7 @@ public enum Renderer {
         ctx.translateBy(x: -out.origin.x, y: -out.origin.y)
 
         if bounds == .expandToFit {
-            ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+            setFill(ctx, .white)
             ctx.fill(out)
         }
 
