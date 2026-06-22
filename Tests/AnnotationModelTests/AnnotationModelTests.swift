@@ -120,6 +120,55 @@ final class AnnotationModelTests: XCTestCase {
         XCTAssertNil(doc.clampedCrop(CGRect(x: 200, y: 200, width: 50, height: 50)))
     }
 
+    // MARK: - Expanded output rect
+
+    func testExpandedOutputRectWithNoElements() {
+        let doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 80))
+        XCTAssertEqual(doc.expandedOutputRect(), CGRect(x: 0, y: 0, width: 100, height: 80))
+    }
+
+    func testExpandedOutputRectWithOverflowingElement() {
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 80))
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 80, y: 40),
+                                      end: CGPoint(x: 150, y: 40), width: 6)))
+        let expanded = doc.expandedOutputRect()
+        XCTAssertGreaterThan(expanded.width, 100)
+        XCTAssertTrue(expanded.contains(CGRect(origin: .zero, size: CGSize(width: 100, height: 80))))
+    }
+
+    func testExpandedOutputRectWithNegativePosition() {
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 80))
+        doc.add(.rectangle(ShapeElement(rect: CGRect(x: -30, y: -20, width: 50, height: 40), width: 4)))
+        let expanded = doc.expandedOutputRect()
+        XCTAssertLessThan(expanded.origin.x, 0)
+        XCTAssertLessThan(expanded.origin.y, 0)
+    }
+
+    func testExpandedOutputRectWithCrop() {
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 200, height: 200))
+        doc.crop = CGRect(x: 50, y: 50, width: 100, height: 100)
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 60, y: 60),
+                                      end: CGPoint(x: 180, y: 60), width: 6)))
+        let expanded = doc.expandedOutputRect()
+        XCTAssertGreaterThan(expanded.maxX, 150)
+    }
+
+    func testOutputRectForClipToImage() {
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 80))
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 80, y: 40),
+                                      end: CGPoint(x: 150, y: 40), width: 6)))
+        let clipped = doc.outputRect(for: .clipToImage)
+        XCTAssertEqual(clipped, CGRect(x: 0, y: 0, width: 100, height: 80))
+    }
+
+    func testOutputRectForExpandToFit() {
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 80))
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 80, y: 40),
+                                      end: CGPoint(x: 150, y: 40), width: 6)))
+        let expanded = doc.outputRect(for: .expandToFit)
+        XCTAssertGreaterThan(expanded.width, 100)
+    }
+
     func testCornerHandlesAndMovingCorner() {
         let rect = CGRect(x: 0, y: 0, width: 10, height: 20)
         let handles = rect.cornerHandles()

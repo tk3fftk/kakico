@@ -23,6 +23,7 @@ struct ContentView: View {
     var controller: CanvasController
 
     var body: some View {
+        _ = controller.exportBounds
         VStack(spacing: 0) {
             ToolbarBar(controller: controller)
             Divider()

@@ -26,8 +26,10 @@ public enum Renderer {
     }
 
     /// Renders the document to a `CGImage`, honoring the crop rect, at `scale`.
-    public static func flatten(_ doc: Document, baseImage: CGImage?, scale: CGFloat = 1) -> CGImage? {
-        let out = doc.outputRect
+    public static func flatten(_ doc: Document, baseImage: CGImage?,
+                               scale: CGFloat = 1,
+                               bounds: ExportBounds = .clipToImage) -> CGImage? {
+        let out = doc.outputRect(for: bounds)
         let pixelW = Int((out.width * scale).rounded())
         let pixelH = Int((out.height * scale).rounded())
         guard pixelW > 0, pixelH > 0 else { return nil }
@@ -44,6 +46,11 @@ public enum Renderer {
         ctx.translateBy(x: 0, y: out.height)
         ctx.scaleBy(x: 1, y: -1)
         ctx.translateBy(x: -out.origin.x, y: -out.origin.y)
+
+        if bounds == .expandToFit {
+            ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+            ctx.fill(out)
+        }
 
         draw(doc, baseImage: baseImage, in: ctx)
         return ctx.makeImage()

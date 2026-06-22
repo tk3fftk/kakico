@@ -104,6 +104,48 @@ final class AnnotationRenderTests: XCTestCase {
         XCTAssertNotEqual(pixelHash(plain), pixelHash(annotated))
     }
 
+    // MARK: - Export bounds
+
+    func testFlattenExpandToFitExpandsCanvas() {
+        let base = solidImage(CGSize(width: 50, height: 50), color: (0, 0, 1))
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 50, height: 50))
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 40, y: 25),
+                                      end: CGPoint(x: 100, y: 25), width: 6)))
+        let out = Renderer.flatten(doc, baseImage: base, scale: 1, bounds: .expandToFit)!
+        XCTAssertGreaterThan(out.width, 50)
+    }
+
+    func testFlattenExpandToFitFillsWhiteBackground() {
+        let base = solidImage(CGSize(width: 50, height: 50), color: (0, 0, 1))
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 50, height: 50))
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 40, y: 25),
+                                      end: CGPoint(x: 100, y: 25), width: 6)))
+        let out = Renderer.flatten(doc, baseImage: base, scale: 1, bounds: .expandToFit)!
+        let px = samplePixel(out, x: out.width - 1, y: 1)
+        XCTAssertGreaterThan(px.r, 240)
+        XCTAssertGreaterThan(px.g, 240)
+        XCTAssertGreaterThan(px.b, 240)
+    }
+
+    func testFlattenClipToImagePreservesSize() {
+        let base = solidImage(CGSize(width: 50, height: 50), color: (0, 0, 1))
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 50, height: 50))
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 40, y: 25),
+                                      end: CGPoint(x: 100, y: 25), width: 6)))
+        let out = Renderer.flatten(doc, baseImage: base, scale: 1, bounds: .clipToImage)!
+        XCTAssertEqual(out.width, 50)
+        XCTAssertEqual(out.height, 50)
+    }
+
+    func testFlattenDefaultBoundsClips() {
+        let base = solidImage(CGSize(width: 50, height: 50), color: (0, 0, 1))
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 50, height: 50))
+        doc.add(.arrow(SegmentElement(start: CGPoint(x: 40, y: 25),
+                                      end: CGPoint(x: 100, y: 25), width: 6)))
+        let out = Renderer.flatten(doc, baseImage: base, scale: 1)!
+        XCTAssertEqual(out.width, 50, "default bounds should clip")
+    }
+
     private func checkerImage(_ size: Int) -> CGImage {
         let cs = CGColorSpace(name: CGColorSpace.sRGB)!
         let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,

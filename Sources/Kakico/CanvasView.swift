@@ -54,6 +54,7 @@ final class CanvasNSView: NSView {
     // (document sans crop + base image) actually changes, not on every redraw.
     private var flattenedKey: Document?
     private var flattenedBase: CGImage?
+    private var flattenedBounds: ExportBounds?
     private var textEditor: NSTextView?
     private var editingTextID: ElementID?
     private var antsTimer: Timer?
@@ -76,32 +77,39 @@ final class CanvasNSView: NSView {
 
     // MARK: Coordinate mapping
 
-    private var canvasSize: CGSize { controller?.document?.canvasSize ?? .zero }
+    private var effectiveCanvasRect: CGRect {
+        guard let controller, let doc = controller.document else {
+            return CGRect(origin: .zero, size: .zero)
+        }
+        var displayDoc = doc
+        displayDoc.crop = nil
+        return displayDoc.outputRect(for: controller.exportBounds)
+    }
 
     private var displayScale: CGFloat {
-        let s = canvasSize
-        guard s.width > 0, s.height > 0 else { return 1 }
-        return min(bounds.width / s.width, bounds.height / s.height)
+        let eff = effectiveCanvasRect
+        guard eff.width > 0, eff.height > 0 else { return 1 }
+        return min(bounds.width / eff.width, bounds.height / eff.height)
     }
 
     private var displayRect: CGRect {
-        let s = canvasSize
+        let eff = effectiveCanvasRect
         let scale = displayScale
-        let w = s.width * scale, h = s.height * scale
+        let w = eff.width * scale, h = eff.height * scale
         return CGRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h)
     }
 
     private func modelToView(_ p: CGPoint) -> CGPoint {
-        let r = displayRect, scale = displayScale
-        return CGPoint(x: r.minX + p.x * scale,
-                       y: r.minY + (canvasSize.height - p.y) * scale)
+        let r = displayRect, scale = displayScale, eff = effectiveCanvasRect
+        return CGPoint(x: r.minX + (p.x - eff.origin.x) * scale,
+                       y: r.minY + (eff.height - (p.y - eff.origin.y)) * scale)
     }
 
     private func viewToModel(_ p: CGPoint) -> CGPoint {
-        let r = displayRect, scale = displayScale
+        let r = displayRect, scale = displayScale, eff = effectiveCanvasRect
         guard scale > 0 else { return .zero }
-        return CGPoint(x: (p.x - r.minX) / scale,
-                       y: canvasSize.height - (p.y - r.minY) / scale)
+        return CGPoint(x: eff.origin.x + (p.x - r.minX) / scale,
+                       y: eff.origin.y + eff.height - (p.y - r.minY) / scale)
     }
 
     private var modelTolerance: CGFloat { 8 / max(displayScale, 0.0001) }
@@ -117,14 +125,15 @@ final class CanvasNSView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext,
               let controller, let doc = controller.document else { return }
 
-        // Display always shows the full canvas; a pending crop is shown as
-        // an overlay, not by shrinking the flattened image.
         var displayDoc = doc
         displayDoc.crop = nil
-        if flattened == nil || flattenedKey != displayDoc || flattenedBase !== controller.baseImage {
-            flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1)
+        let bounds = controller.exportBounds
+        if flattened == nil || flattenedKey != displayDoc || flattenedBase !== controller.baseImage || flattenedBounds != bounds {
+            flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1,
+                                        bounds: bounds)
             flattenedKey = displayDoc
             flattenedBase = controller.baseImage
+            flattenedBounds = bounds
         }
         if let img = flattened {
             ctx.interpolationQuality = .high

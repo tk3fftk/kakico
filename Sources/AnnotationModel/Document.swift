@@ -1,6 +1,11 @@
 import Foundation
 import CoreGraphics
 
+public enum ExportBounds: String, Codable, CaseIterable, Sendable {
+    case expandToFit
+    case clipToImage
+}
+
 /// The annotation document: a base image plus an ordered list of annotations
 /// (draw order == array order) and an optional crop rect, all in image pixel
 /// space.
@@ -21,6 +26,23 @@ public struct Document: Codable, Equatable, Sendable {
     /// Output bounds after crop (defaults to the full canvas).
     public var outputRect: CGRect {
         crop ?? CGRect(origin: .zero, size: canvasSize)
+    }
+
+    public func expandedOutputRect() -> CGRect {
+        let base = outputRect
+        guard !elements.isEmpty else { return base }
+        var union = base
+        for element in elements {
+            union = union.union(element.boundingBox())
+        }
+        return union.integral
+    }
+
+    public func outputRect(for bounds: ExportBounds) -> CGRect {
+        switch bounds {
+        case .clipToImage: return outputRect
+        case .expandToFit: return expandedOutputRect()
+        }
     }
 
     // MARK: Element lookup / mutation helpers

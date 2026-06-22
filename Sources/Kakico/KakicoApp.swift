@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AnnotationModel
 
 let blockedMenuTitles: Set<String> = [
     "Writing Tools", "AutoFill",
@@ -111,6 +112,14 @@ struct AppCommands: Commands {
             Button("Copy Image to Clipboard") { ExportService.copyToClipboard(controller) }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(!controller.hasDocument)
+            Divider()
+            Picker("Export Bounds", selection: Binding(
+                get: { controller.exportBounds },
+                set: { controller.exportBounds = $0 }
+            )) {
+                Text("Expand to Fit Annotations").tag(ExportBounds.expandToFit)
+                Text("Clip at Image Boundary").tag(ExportBounds.clipToImage)
+            }
         }
         CommandGroup(replacing: .undoRedo) {
             Button("Undo") { controller.undo() }

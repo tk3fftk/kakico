@@ -11,7 +11,8 @@ enum ExportService {
     /// Flattens the current document honoring crop.
     static func flatten(_ controller: CanvasController, scale: CGFloat = 1) -> CGImage? {
         guard let doc = controller.document else { return nil }
-        return Renderer.flatten(doc, baseImage: controller.baseImage, scale: scale)
+        return Renderer.flatten(doc, baseImage: controller.baseImage, scale: scale,
+                               bounds: controller.exportBounds)
     }
 
     /// Flattened document as PNG bytes (for clipboard / drag-out).
