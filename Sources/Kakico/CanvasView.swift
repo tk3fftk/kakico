@@ -485,19 +485,6 @@ final class CanvasNSView: NSView {
         refresh()
     }
 
-    private func nsColor(_ c: RGBAColor) -> NSColor {
-        NSColor(srgbRed: c.r, green: c.g, blue: c.b, alpha: c.a)
-    }
-
-    private func nsFont(for spec: FontSpec, scale: CGFloat) -> NSFont {
-        let size = spec.pointSize * scale
-        let base = NSFont(name: spec.family, size: size) ?? NSFont.systemFont(ofSize: size)
-        if spec.bold {
-            return NSFontManager.shared.convert(base, toHaveTrait: .boldFontMask)
-        }
-        return base
-    }
-
     // MARK: Drag & drop import
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
@@ -524,4 +511,17 @@ extension CanvasNSView: NSTextViewDelegate {
     func textDidEndEditing(_ notification: Notification) {
         commitTextEditing()
     }
+}
+
+private func nsColor(_ c: RGBAColor) -> NSColor {
+    NSColor(srgbRed: c.r, green: c.g, blue: c.b, alpha: c.a)
+}
+
+private func nsFont(for spec: FontSpec, scale: CGFloat) -> NSFont {
+    let size = spec.pointSize * scale
+    let base = NSFont(name: spec.family, size: size) ?? NSFont.systemFont(ofSize: size)
+    if spec.bold {
+        return NSFontManager.shared.convert(base, toHaveTrait: .boldFontMask)
+    }
+    return base
 }
