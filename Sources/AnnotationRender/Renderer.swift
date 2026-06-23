@@ -33,7 +33,7 @@ public enum Renderer {
         let pixelW = Int((out.width * scale).rounded())
         let pixelH = Int((out.height * scale).rounded())
         let maxPixelCount = 256 * 1024 * 1024
-        guard pixelW > 0, pixelH > 0, pixelW <= maxPixelCount, pixelW * pixelH <= maxPixelCount else { return nil }
+        guard pixelW > 0, pixelH > 0, pixelW <= maxPixelCount, pixelH <= maxPixelCount, pixelW * pixelH <= maxPixelCount else { return nil }
 
         let cs = CGColorSpace(name: CGColorSpace.sRGB)!
         guard let ctx = CGContext(data: nil, width: pixelW, height: pixelH,

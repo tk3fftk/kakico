@@ -39,7 +39,10 @@ struct CanvasView: NSViewRepresentable {
 
 final class CanvasNSView: NSView {
     weak var controller: CanvasController? {
-        didSet { startObserving() }
+        didSet {
+            guard controller !== oldValue else { return }
+            startObserving()
+        }
     }
 
     private enum Drag {
@@ -370,7 +373,8 @@ final class CanvasNSView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let controller else { return }
-        let p = displayInfo.viewToModel(convert(event.locationInWindow, from: nil))
+        let info = displayInfo
+        let p = info.viewToModel(convert(event.locationInWindow, from: nil))
         switch drag {
         case .none:
             return
@@ -448,9 +452,10 @@ final class CanvasNSView: NSView {
               case .text(let text) = element else { return }
         commitTextEditing()
 
-        let tv = MinimalTextView(frame: viewRect(forModelRect: element.boundingBox()).insetBy(dx: -2, dy: -2))
+        let info = displayInfo
+        let tv = MinimalTextView(frame: info.viewRect(forModelRect: element.boundingBox()).insetBy(dx: -2, dy: -2))
         tv.string = text.string
-        tv.font = nsFont(for: text.font, scale: displayScale)
+        tv.font = nsFont(for: text.font, scale: info.scale)
         tv.textColor = nsColor(text.color)
         tv.backgroundColor = NSColor.white.withAlphaComponent(0.85)
         tv.isRichText = false
