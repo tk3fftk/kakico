@@ -38,7 +38,9 @@ struct CanvasView: NSViewRepresentable {
 // MARK: - AppKit canvas
 
 final class CanvasNSView: NSView {
-    weak var controller: CanvasController?
+    weak var controller: CanvasController? {
+        didSet { startObserving() }
+    }
 
     private enum Drag {
         case none
@@ -73,6 +75,21 @@ final class CanvasNSView: NSView {
 
     func refresh() {
         needsDisplay = true
+    }
+
+    private func startObserving() {
+        guard let controller else { return }
+        withObservationTracking {
+            _ = controller.document
+            _ = controller.baseImage
+            _ = controller.selection
+            _ = controller.exportBounds
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.refresh()
+                self?.startObserving()
+            }
+        }
     }
 
     // MARK: Coordinate mapping

@@ -24,6 +24,9 @@ struct ContentView: View {
 
     var body: some View {
         let _ = controller.exportBounds
+        let _ = controller.document
+        let _ = controller.selection
+        let _ = controller.baseImage
         VStack(spacing: 0) {
             ToolbarBar(controller: controller)
             Divider()
@@ -75,8 +78,9 @@ struct ToolbarBar: View {
                         .frame(width: 22, height: 18)
                 }
                 .help(tool.label)
-                .buttonStyle(.bordered)
-                .tint(controller.tool == tool ? .accentColor : nil)
+                .keyboardShortcut(.none)
+                .buttonStyle(.accessoryBarAction)
+                .foregroundStyle(controller.tool == tool ? Color.accentColor : .secondary)
             }
 
             Divider().frame(height: 22)
