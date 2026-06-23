@@ -2,13 +2,13 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/aquaproj/aqua/main/json-schema/aqua-yaml.json
 # aqua - Declarative CLI Version Manager
 # https://aquaproj.github.io/
-# checksum:
-#   enabled: true
-#   require_checksum: true
-#   supported_envs:
-#   - all
+checksum:
+  enabled: true
+  require_checksum: true
+  supported_envs:
+  - all
 registries:
 - type: standard
-  ref: v4.526.0  # renovate: depName=aquaproj/aqua-registry
+  ref: v4.527.0 # renovate: depName=aquaproj/aqua-registry
 packages:
-- name: realm/SwiftLint@0.64.0
+- name: realm/SwiftLint@0.63.3
