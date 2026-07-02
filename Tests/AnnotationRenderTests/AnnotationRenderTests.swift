@@ -158,6 +158,14 @@ final class AnnotationRenderTests: XCTestCase {
         XCTAssertGreaterThan(longSize.height, 44, "overflowing text must outgrow the initial box")
     }
 
+    func testSuggestedSizeForEmptyStringShrinksToMinimum() {
+        let element = TextElement(origin: .zero, size: CGSize(width: 220, height: 300), string: "")
+        let size = Renderer.suggestedSize(for: element)
+        XCTAssertEqual(size.width, 220, "width is the wrap constraint and must not change")
+        XCTAssertEqual(size.height, element.font.pointSize + 8,
+                       "empty text should shrink back to the one-line minimum")
+    }
+
     /// CoreText drops lines that don't fit the frame rect, so an overflowing
     /// string in the initial 220x44 box rendered nothing. After resizing to
     /// `suggestedSize`, the wrapped lines below the first must be visible.

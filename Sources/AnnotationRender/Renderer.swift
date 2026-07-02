@@ -164,8 +164,12 @@ public enum Renderer {
     /// Size needed to render the full string wrapped at the element's current
     /// width. CoreText drops lines that don't fit the frame rect, so callers
     /// must grow `size` to this value or overflowing text silently disappears.
+    /// An empty string yields the one-line minimum height, so editors shrink
+    /// back when all text is deleted.
     public static func suggestedSize(for e: TextElement) -> CGSize {
-        guard !e.string.isEmpty else { return e.size }
+        guard !e.string.isEmpty else {
+            return CGSize(width: e.size.width, height: e.font.pointSize + 8)
+        }
         let framesetter = CTFramesetterCreateWithAttributedString(attributedString(for: e))
         let constraint = CGSize(width: e.size.width, height: .greatestFiniteMagnitude)
         let fit = CTFramesetterSuggestFrameSizeWithConstraints(

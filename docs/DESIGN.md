@@ -1,5 +1,7 @@
 # Miro (macOS) — SwiftUI Implementation Guide
 
+> **Note:** This document is a reference catalog of Miro's design language, not a spec of what Kakico implements. `Sources/Kakico/Theme.swift` is the source of truth for implemented tokens. Fonts are intentionally mapped to system fonts (Inter/Caveat/JetBrains Mono are not bundled). Several components described here — `MiroStickyNote`, `MiroZoomPill`, `MiroHomeSidebar`, multiplayer cursors, and the pan/zoom canvas — are unimplemented references.
+
 ## 1. Color Tokens
 
 ```swift
@@ -425,7 +427,7 @@ The board goes to `#202024` with grid `#38383F`; **sticky notes stay full-color 
 
 ## 8. Minimum macOS & Accessibility Notes
 
-- Minimum target: macOS 14 (Sonoma). `MagnificationGesture` and `.regularMaterial` available since macOS 12; `@Observable` requires macOS 14+
+- Minimum target: macOS 15 (Sequoia), matching `Package.swift` (`.macOS(.v15)`). `MagnificationGesture` and `.regularMaterial` available since macOS 12; `@Observable` requires macOS 14+
 - Bundle Inter (UI), Caveat (optional handwriting sticky), JetBrains Mono (code embeds) TTFs via `Info.plist` `ATSApplicationFontsPath` key pointing to a `Fonts/` directory inside the app bundle — all SIL OFL licensed
 - Text scaling: support `@ScaledMetric` on sheet titles, body text, list rows, board titles; keep toolbar labels, zoom %, avatar initials, connector labels, sidebar labels FIXED. Sticky-note text auto-fits its box independent of system text size
 - VoiceOver: label sticky notes "Sticky note: {text}, {color}"; the canvas should expose objects as an accessible list via `NSAccessibility` children (with a "Find on board" search) since spatial navigation is impractical non-visually; toolbar tools labeled by name + selected state; remote cursors announced sparingly ("{name} is editing")

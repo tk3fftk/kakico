@@ -7,7 +7,13 @@ import AnnotationModel
 /// a snapshot-based undo stack. The single source of truth for the UI.
 @MainActor @Observable
 final class CanvasController {
-    var document: Document?
+    var document: Document? {
+        didSet { documentVersion &+= 1 }
+    }
+    /// Monotonic counter bumped on every write to `document`; a cheap
+    /// change-detection key for the canvas's flatten cache. Bumps are
+    /// conservative — equal-value writes also increment.
+    @ObservationIgnored private(set) var documentVersion: Int = 0
     var baseImage: CGImage?
     var selection: ElementID?
     var tool: Tool = .arrow

@@ -76,19 +76,28 @@ struct MiroGrid: View {
     let color: Color
     var spacing: CGFloat = 28
 
-    var body: some View {
-        Canvas { ctx, size in
-            var x: CGFloat = 0
-            while x < size.width {
-                var y: CGFloat = 0
-                while y < size.height {
-                    ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 1.5, height: 1.5)),
-                             with: .color(color))
-                    y += spacing
-                }
-                x += spacing
-            }
+    // A per-dot Canvas loop is O(area) and re-runs on every frame of a live
+    // window resize; tiling a single-dot image keeps the cost O(1).
+    @MainActor private static var tileCache: [Color: NSImage] = [:]
+
+    private static func tile(color: Color, spacing: CGFloat) -> NSImage {
+        if let cached = tileCache[color] { return cached }
+        let ns = NSColor(color)
+        // flipped: true puts the dot at the tile's top-left, matching the
+        // previous Canvas placement.
+        let image = NSImage(size: NSSize(width: spacing, height: spacing),
+                            flipped: true) { _ in
+            ns.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 0, y: 0, width: 1.5, height: 1.5)).fill()
+            return true
         }
+        tileCache[color] = image
+        return image
+    }
+
+    var body: some View {
+        Rectangle()
+            .fill(ImagePaint(image: Image(nsImage: Self.tile(color: color, spacing: spacing))))
     }
 }
 

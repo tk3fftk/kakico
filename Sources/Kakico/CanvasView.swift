@@ -60,6 +60,10 @@ final class CanvasNSView: NSView {
     private var flattenedKey: Document?
     private var flattenedBase: CGImage?
     private var flattenedBounds: ExportBounds?
+    // Controller's documentVersion at the last cache check; lets draw() skip
+    // the Document copy + equality entirely on redraws with no model change
+    // (e.g. the 12Hz marching-ants ticks).
+    private var flattenedVersion: Int = -1
     private var textEditor: NSTextView?
     private var editingTextID: ElementID?
     private var antsTimer: Timer?
@@ -72,8 +76,26 @@ final class CanvasNSView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         registerForDraggedTypes([.fileURL, .png, .tiff])
+        // Selector-based observers are auto-unregistered on dealloc.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appDidResignActive),
+            name: NSApplication.didResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification, object: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    // Pause the marching-ants timer while the app is inactive; the crop
+    // outline freezes but stops burning CPU in the background.
+    @objc private func appDidResignActive() {
+        antsTimer?.invalidate()
+        antsTimer = nil
+    }
+
+    @objc private func appDidBecomeActive() {
+        needsDisplay = true // draw() restarts the timer via updateAntsTimer
+    }
 
     func refresh() {
         needsDisplay = true
@@ -154,15 +176,24 @@ final class CanvasNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext,
-              let controller, let doc = controller.document,
-              let displayDoc = displayDocument else { return }
+              let controller, let doc = controller.document else { return }
         let exportBounds = controller.exportBounds
-        if flattened == nil || flattenedKey != displayDoc || flattenedBase !== controller.baseImage || flattenedBounds != exportBounds {
-            flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1,
-                                        bounds: exportBounds)
-            flattenedKey = displayDoc
-            flattenedBase = controller.baseImage
-            flattenedBounds = exportBounds
+        let version = controller.documentVersion
+        if flattened == nil || flattenedVersion != version
+            || flattenedBase !== controller.baseImage || flattenedBounds != exportBounds {
+            var displayDoc = doc
+            displayDoc.crop = nil
+            // Crop-rect drags bump the version but don't change flattened
+            // content; the equality keeps them from re-flattening.
+            if flattened == nil || flattenedKey != displayDoc
+                || flattenedBase !== controller.baseImage || flattenedBounds != exportBounds {
+                flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1,
+                                            bounds: exportBounds)
+                flattenedKey = displayDoc
+                flattenedBase = controller.baseImage
+                flattenedBounds = exportBounds
+            }
+            flattenedVersion = version
         }
         let info = displayInfo
         if let img = flattened {
@@ -237,7 +268,14 @@ final class CanvasNSView: NSView {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.antsPhase += 1
-                    self.needsDisplay = true
+                    // Only the crop outline animates; keep the invalidated
+                    // region there (-8 covers the 9pt corner handles).
+                    if let crop = self.controller?.document?.crop {
+                        self.setNeedsDisplay(self.displayInfo.viewRect(forModelRect: crop)
+                            .insetBy(dx: -8, dy: -8))
+                    } else {
+                        self.needsDisplay = true
+                    }
                 }
             }
             RunLoop.main.add(timer, forMode: .common)
@@ -518,7 +556,7 @@ extension CanvasNSView: NSTextViewDelegate {
         commitTextEditing()
     }
 
-    // Grow the inline editor with its content; otherwise text past the fixed
+    // Resize the inline editor with its content; otherwise text past the fixed
     // frame is invisible while typing (the model rect is synced on commit).
     func textDidChange(_ notification: Notification) {
         guard let tv = textEditor, let id = editingTextID,
@@ -526,8 +564,9 @@ extension CanvasNSView: NSTextViewDelegate {
               case .text(var t) = element else { return }
         t.string = tv.string
         let size = Renderer.suggestedSize(for: t)
-        tv.frame = displayInfo.viewRect(forModelRect: CGRect(origin: t.origin, size: size))
+        let newFrame = displayInfo.viewRect(forModelRect: CGRect(origin: t.origin, size: size))
             .insetBy(dx: -2, dy: -2)
+        if tv.frame != newFrame { tv.frame = newFrame }
     }
 }
 
