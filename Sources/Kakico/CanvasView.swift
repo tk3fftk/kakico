@@ -54,6 +54,12 @@ final class CanvasNSView: NSView {
         case movingCrop(last: CGPoint)
     }
     private var drag: Drag = .none
+    /// Display mapping frozen for the duration of a drag. With expandToFit,
+    /// dragging past the image edge grows the canvas, which would shift the
+    /// mouse mapping mid-drag and feed the growth back on itself (runaway
+    /// resize). Frozen, the drag stays 1:1 with the cursor; the view re-fits
+    /// on mouseUp.
+    private var dragDisplayInfo: DisplayInfo?
     private var flattened: CGImage?
     // Cache key for `flattened`: re-render only when the content it shows
     // (document sans crop + base image) actually changes, not on every redraw.
@@ -195,15 +201,21 @@ final class CanvasNSView: NSView {
             }
             flattenedVersion = version
         }
-        let info = displayInfo
+        let info = dragDisplayInfo ?? displayInfo
+        // Model rect the cached image covers (`flattenedKey` is the document it
+        // was rendered from), mapped through `info`: with a frozen transform,
+        // grown content draws outside the fitted rect instead of being squeezed
+        // into it. Equals info.rect when info is live.
+        let imageRect = flattenedKey.map { info.viewRect(forModelRect: $0.outputRect(for: exportBounds)) }
+            ?? info.rect
         if let img = flattened {
             ctx.interpolationQuality = .high
-            ctx.draw(img, in: info.rect)
+            ctx.draw(img, in: imageRect)
         }
 
         // Crop dimming + outline.
         if let crop = doc.crop {
-            drawCropOverlay(crop, info: info, in: ctx)
+            drawCropOverlay(crop, info: info, imageRect: imageRect, in: ctx)
         }
         updateAntsTimer(cropVisible: doc.crop != nil)
 
@@ -234,15 +246,15 @@ final class CanvasNSView: NSView {
         }
     }
 
-    private func drawCropOverlay(_ crop: CGRect, info: DisplayInfo, in ctx: CGContext) {
+    private func drawCropOverlay(_ crop: CGRect, info: DisplayInfo, imageRect: CGRect, in ctx: CGContext) {
         let viewCrop = info.viewRect(forModelRect: crop)
         ctx.setFillColor(NSColor.black.withAlphaComponent(0.45).cgColor)
-        ctx.fill(info.rect)
+        ctx.fill(imageRect)
         ctx.clear(viewCrop)
         if let img = flattened {
             ctx.saveGState()
             ctx.clip(to: viewCrop)
-            ctx.draw(img, in: info.rect)
+            ctx.draw(img, in: imageRect)
             ctx.restoreGState()
         }
         // Marching ants (phase advanced by `antsTimer`); dark underlay keeps
@@ -271,7 +283,8 @@ final class CanvasNSView: NSView {
                     // Only the crop outline animates; keep the invalidated
                     // region there (-8 covers the 9pt corner handles).
                     if let crop = self.controller?.document?.crop {
-                        self.setNeedsDisplay(self.displayInfo.viewRect(forModelRect: crop)
+                        let info = self.dragDisplayInfo ?? self.displayInfo
+                        self.setNeedsDisplay(info.viewRect(forModelRect: crop)
                             .insetBy(dx: -8, dy: -8))
                     } else {
                         self.needsDisplay = true
@@ -321,6 +334,12 @@ final class CanvasNSView: NSView {
             handleCropMouseDown(at: p, viewPoint: viewPoint, info: info)
         default:
             handlePointerMouseDown(at: p, creationTool: controller.tool, info: info)
+        }
+        // Only actual drags freeze the mapping; click paths (text creation,
+        // double-click edit) must keep using the live one.
+        switch drag {
+        case .none: break
+        default: dragDisplayInfo = info
         }
         refresh()
     }
@@ -411,7 +430,7 @@ final class CanvasNSView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let controller else { return }
-        let info = displayInfo
+        let info = dragDisplayInfo ?? displayInfo
         let p = info.viewToModel(convert(event.locationInWindow, from: nil))
         switch drag {
         case .none:
@@ -434,6 +453,7 @@ final class CanvasNSView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        dragDisplayInfo = nil
         guard let controller else { return }
         // A plain click (no real drag) leaves a degenerate element: give it a
         // default initial size, Skitch-style, rather than dropping it. Drag-
