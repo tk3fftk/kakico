@@ -62,6 +62,12 @@ struct ContentView: View {
                     .padding(.bottom, 20)
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if controller.hasDocument {
+                ImageSizeBadge(controller: controller)
+                    .padding(16)
+            }
+        }
         .animation(.easeOut(duration: 0.12), value: controller.document?.crop != nil)
     }
 }
@@ -230,6 +236,31 @@ struct CropActionBar: View {
         }
         .miroFloatingPanel()
         .transition(.opacity)
+    }
+}
+
+/// Bottom-right badge showing the image size in pixels; during a pending crop
+/// it shows the crop size with the original size in parentheses.
+struct ImageSizeBadge: View {
+    var controller: CanvasController
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        if let doc = controller.document {
+            Text(label(for: doc))
+                .font(.miroCaption)
+                .foregroundStyle(MiroTheme.textSecondary(scheme))
+                .miroFloatingPanel()
+        }
+    }
+
+    private func label(for doc: Document) -> String {
+        let w = Int(doc.canvasSize.width)
+        let h = Int(doc.canvasSize.height)
+        if let crop = doc.crop, let clamped = doc.clampedCrop(crop)?.integral {
+            return "\(Int(clamped.width)) × \(Int(clamped.height)) (\(w) × \(h))"
+        }
+        return "\(w) × \(h)"
     }
 }
 
