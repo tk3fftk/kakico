@@ -114,6 +114,7 @@ struct ToolPalette: View {
                         .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(controller.tool == tool ? Color.miroInk : MiroTheme.textSecondary(scheme))
                         .frame(width: 40, height: 40)
+                        .contentShape(.rect(cornerRadius: 11))
                         .background(
                             RoundedRectangle(cornerRadius: 11)
                                 .fill(controller.tool == tool ? Color.miroYellow : .clear)
@@ -141,6 +142,7 @@ struct ToolPalette: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(MiroTheme.textSecondary(scheme))
                     .frame(width: 40, height: 40)
+                    .contentShape(.rect(cornerRadius: 11))
             }
             .buttonStyle(MiroTileButtonStyle())
             .help("Stroke width")
@@ -198,6 +200,7 @@ struct ActionBar: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(tint ?? MiroTheme.textSecondary(scheme))
                 .frame(width: 36, height: 36)
+                .contentShape(.rect(cornerRadius: 11))
         }
         .buttonStyle(MiroTileButtonStyle())
         .help(help)
