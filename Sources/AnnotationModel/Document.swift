@@ -72,6 +72,12 @@ public struct Document: Codable, Equatable, Sendable {
         return clamped
     }
 
+    /// The pending crop clamped to the canvas and snapped to whole pixels,
+    /// or nil when there is no crop or it is degenerate.
+    public var integralCrop: CGRect? {
+        crop.flatMap { clampedCrop($0)?.integral }
+    }
+
     public mutating func add(_ element: Annotation) {
         elements.append(element)
     }

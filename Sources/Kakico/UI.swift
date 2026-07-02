@@ -63,8 +63,8 @@ struct ContentView: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if controller.hasDocument {
-                ImageSizeBadge(controller: controller)
+            if let doc = controller.document {
+                ImageSizeBadge(document: doc, exportBounds: controller.exportBounds)
                     .padding(16)
             }
         }
@@ -239,28 +239,27 @@ struct CropActionBar: View {
     }
 }
 
-/// Bottom-right badge showing the image size in pixels; during a pending crop
-/// it shows the crop size with the original size in parentheses.
+/// Bottom-right badge showing the exported image size in pixels; during a
+/// pending crop it also shows the original size in parentheses.
 struct ImageSizeBadge: View {
-    var controller: CanvasController
+    var document: Document
+    var exportBounds: ExportBounds
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        if let doc = controller.document {
-            Text(label(for: doc))
-                .font(.miroCaption)
-                .foregroundStyle(MiroTheme.textSecondary(scheme))
-                .miroFloatingPanel()
-        }
+        Text(label)
+            .font(.miroCaption)
+            .foregroundStyle(MiroTheme.textSecondary(scheme))
+            .miroFloatingPanel()
     }
 
-    private func label(for doc: Document) -> String {
-        let w = Int(doc.canvasSize.width)
-        let h = Int(doc.canvasSize.height)
-        if let crop = doc.crop, let clamped = doc.clampedCrop(crop)?.integral {
-            return "\(Int(clamped.width)) × \(Int(clamped.height)) (\(w) × \(h))"
-        }
-        return "\(w) × \(h)"
+    private var label: String {
+        let out = document.outputRect(for: exportBounds).integral
+        let size = "\(Int(out.width)) × \(Int(out.height))"
+        guard document.crop != nil else { return size }
+        let w = Int(document.canvasSize.width)
+        let h = Int(document.canvasSize.height)
+        return "\(size) (\(w) × \(h))"
     }
 }
 

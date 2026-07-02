@@ -146,8 +146,8 @@ final class CanvasController {
     /// elements into the new origin, and shrinks the canvas. Undoable; the
     /// crop stays non-destructive (re-editable) until this is called.
     func applyCrop() {
-        guard let doc = document, let crop = doc.crop, let base = baseImage,
-              let clamped = doc.clampedCrop(crop)?.integral,
+        guard let doc = document, let base = baseImage,
+              let clamped = doc.integralCrop,
               let croppedBase = base.cropping(to: clamped) else { return }
 
         var newDoc = doc
