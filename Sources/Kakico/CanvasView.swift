@@ -60,10 +60,6 @@ final class CanvasNSView: NSView {
     private var flattenedKey: Document?
     private var flattenedBase: CGImage?
     private var flattenedBounds: ExportBounds?
-    // Controller's documentVersion at the last cache check; lets draw() skip
-    // the Document copy + equality entirely on redraws with no model change
-    // (e.g. the 12Hz marching-ants ticks).
-    private var flattenedVersion: Int = -1
     private var textEditor: NSTextView?
     private var editingTextID: ElementID?
     private var antsTimer: Timer?
@@ -75,27 +71,10 @@ final class CanvasNSView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         registerForDraggedTypes([.fileURL, .png, .tiff])
-        // Selector-based observers are auto-unregistered on dealloc.
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(appDidResignActive),
-            name: NSApplication.didResignActiveNotification, object: nil)
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(appDidBecomeActive),
-            name: NSApplication.didBecomeActiveNotification, object: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
-
-    // Pause the marching-ants timer while the app is inactive; the crop
-    // outline freezes but stops burning CPU in the background.
-    @objc private func appDidResignActive() {
-        antsTimer?.invalidate()
-        antsTimer = nil
-    }
-
-    @objc private func appDidBecomeActive() {
-        needsDisplay = true // draw() restarts the timer via updateAntsTimer
-    }
 
     func refresh() {
         needsDisplay = true
@@ -176,24 +155,15 @@ final class CanvasNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext,
-              let controller, let doc = controller.document else { return }
+              let controller, let doc = controller.document,
+              let displayDoc = displayDocument else { return }
         let exportBounds = controller.exportBounds
-        let version = controller.documentVersion
-        if flattened == nil || flattenedVersion != version
-            || flattenedBase !== controller.baseImage || flattenedBounds != exportBounds {
-            var displayDoc = doc
-            displayDoc.crop = nil
-            // Crop-rect drags bump the version but don't change flattened
-            // content; the equality keeps them from re-flattening.
-            if flattened == nil || flattenedKey != displayDoc
-                || flattenedBase !== controller.baseImage || flattenedBounds != exportBounds {
-                flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1,
-                                            bounds: exportBounds)
-                flattenedKey = displayDoc
-                flattenedBase = controller.baseImage
-                flattenedBounds = exportBounds
-            }
-            flattenedVersion = version
+        if flattened == nil || flattenedKey != displayDoc || flattenedBase !== controller.baseImage || flattenedBounds != exportBounds {
+            flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1,
+                                        bounds: exportBounds)
+            flattenedKey = displayDoc
+            flattenedBase = controller.baseImage
+            flattenedBounds = exportBounds
         }
         let info = displayInfo
         if let img = flattened {
@@ -214,23 +184,25 @@ final class CanvasNSView: NSView {
     }
 
     private func drawHandle(at center: CGPoint, stroke: NSColor, lineWidth: CGFloat, in ctx: CGContext) {
-        let hr = CGRect(x: center.x - 4.5, y: center.y - 4.5, width: 9, height: 9)
+        let hr = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
         ctx.setFillColor(NSColor.white.cgColor)
-        ctx.fillEllipse(in: hr)
+        ctx.fill(hr)
         ctx.setStrokeColor(stroke.cgColor)
         ctx.setLineWidth(lineWidth)
-        ctx.strokeEllipse(in: hr)
+        ctx.stroke(hr)
     }
 
     private func drawSelection(_ element: Annotation, info: DisplayInfo, in ctx: CGContext) {
         let viewBox = info.viewRect(forModelRect: element.boundingBox())
-        ctx.setStrokeColor(NSColor.miroBlue.cgColor)
-        ctx.setLineWidth(2)
+        ctx.setStrokeColor(NSColor.controlAccentColor.withAlphaComponent(0.9).cgColor)
+        ctx.setLineWidth(1)
+        ctx.setLineDash(phase: 0, lengths: [4, 3])
         ctx.stroke(viewBox.insetBy(dx: -2, dy: -2))
+        ctx.setLineDash(phase: 0, lengths: [])
 
         for handle in element.handles() {
             drawHandle(at: info.modelToView(handle.position),
-                       stroke: NSColor.miroBlue, lineWidth: 1.5, in: ctx)
+                       stroke: NSColor.controlAccentColor, lineWidth: 1.5, in: ctx)
         }
     }
 
@@ -245,12 +217,9 @@ final class CanvasNSView: NSView {
             ctx.draw(img, in: info.rect)
             ctx.restoreGState()
         }
-        // Marching ants (phase advanced by `antsTimer`); dark underlay keeps
-        // the white dashes visible over light image regions.
-        ctx.setStrokeColor(NSColor.black.withAlphaComponent(0.55).cgColor)
-        ctx.setLineWidth(1)
-        ctx.stroke(viewCrop)
+        // Marching ants (phase advanced by `antsTimer`).
         ctx.setStrokeColor(NSColor.white.cgColor)
+        ctx.setLineWidth(1)
         ctx.setLineDash(phase: antsPhase, lengths: [5, 4])
         ctx.stroke(viewCrop)
         ctx.setLineDash(phase: 0, lengths: [])
@@ -258,7 +227,7 @@ final class CanvasNSView: NSView {
         // Corner handles so the crop rect is re-editable with the crop tool.
         for handle in viewCrop.cornerHandles() {
             drawHandle(at: handle.position,
-                       stroke: NSColor.miroBlue, lineWidth: 1, in: ctx)
+                       stroke: NSColor.black.withAlphaComponent(0.6), lineWidth: 1, in: ctx)
         }
     }
 
@@ -268,14 +237,7 @@ final class CanvasNSView: NSView {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.antsPhase += 1
-                    // Only the crop outline animates; keep the invalidated
-                    // region there (-8 covers the 9pt corner handles).
-                    if let crop = self.controller?.document?.crop {
-                        self.setNeedsDisplay(self.displayInfo.viewRect(forModelRect: crop)
-                            .insetBy(dx: -8, dy: -8))
-                    } else {
-                        self.needsDisplay = true
-                    }
+                    self.needsDisplay = true
                 }
             }
             RunLoop.main.add(timer, forMode: .common)
@@ -495,7 +457,7 @@ final class CanvasNSView: NSView {
         tv.string = text.string
         tv.font = nsFont(for: text.font, scale: info.scale)
         tv.textColor = nsColor(text.color)
-        tv.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.9)
+        tv.backgroundColor = NSColor.white.withAlphaComponent(0.85)
         tv.isRichText = false
         tv.drawsBackground = true
         tv.delegate = self
@@ -520,7 +482,6 @@ final class CanvasNSView: NSView {
                 doc.mutate(id) { annotation in
                     if case .text(var t) = annotation {
                         t.string = newString
-                        t.size = Renderer.suggestedSize(for: t)
                         annotation = .text(t)
                     }
                 }
@@ -554,19 +515,6 @@ final class CanvasNSView: NSView {
 extension CanvasNSView: NSTextViewDelegate {
     func textDidEndEditing(_ notification: Notification) {
         commitTextEditing()
-    }
-
-    // Resize the inline editor with its content; otherwise text past the fixed
-    // frame is invisible while typing (the model rect is synced on commit).
-    func textDidChange(_ notification: Notification) {
-        guard let tv = textEditor, let id = editingTextID,
-              let element = controller?.document?.elements.first(where: { $0.id == id }),
-              case .text(var t) = element else { return }
-        t.string = tv.string
-        let size = Renderer.suggestedSize(for: t)
-        let newFrame = displayInfo.viewRect(forModelRect: CGRect(origin: t.origin, size: size))
-            .insetBy(dx: -2, dy: -2)
-        if tv.frame != newFrame { tv.frame = newFrame }
     }
 }
 

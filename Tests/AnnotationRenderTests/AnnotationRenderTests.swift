@@ -146,64 +146,6 @@ final class AnnotationRenderTests: XCTestCase {
         XCTAssertEqual(out.width, 50, "default bounds should clip")
     }
 
-    func testSuggestedSizeGrowsWithContent() {
-        let short = TextElement(origin: .zero, size: CGSize(width: 220, height: 44), string: "Hi")
-        let long = TextElement(origin: .zero, size: CGSize(width: 220, height: 44),
-                               string: String(repeating: "wrap me around ", count: 10))
-        let shortSize = Renderer.suggestedSize(for: short)
-        let longSize = Renderer.suggestedSize(for: long)
-        XCTAssertEqual(shortSize.width, 220, "width is the wrap constraint and must not change")
-        XCTAssertEqual(longSize.width, 220)
-        XCTAssertGreaterThan(longSize.height, shortSize.height, "long text needs more lines")
-        XCTAssertGreaterThan(longSize.height, 44, "overflowing text must outgrow the initial box")
-    }
-
-    func testSuggestedSizeForEmptyStringShrinksToMinimum() {
-        let element = TextElement(origin: .zero, size: CGSize(width: 220, height: 300), string: "")
-        let size = Renderer.suggestedSize(for: element)
-        XCTAssertEqual(size.width, 220, "width is the wrap constraint and must not change")
-        XCTAssertEqual(size.height, element.font.pointSize + 8,
-                       "empty text should shrink back to the one-line minimum")
-    }
-
-    /// CoreText drops lines that don't fit the frame rect, so an overflowing
-    /// string in the initial 220x44 box rendered nothing. After resizing to
-    /// `suggestedSize`, the wrapped lines below the first must be visible.
-    func testOverflowingTextRendersAfterResize() {
-        let canvas = CGSize(width: 400, height: 400)
-        let base = solidImage(canvas, color: (1, 1, 1))
-        var element = TextElement(origin: CGPoint(x: 10, y: 10),
-                                  size: CGSize(width: 220, height: 44),
-                                  string: String(repeating: "wrap me around ", count: 10),
-                                  color: RGBAColor(r: 1, g: 0, b: 0))
-        element.size = Renderer.suggestedSize(for: element)
-
-        var doc = Document(baseImage: .pngData(Data()), canvasSize: canvas)
-        doc.add(.text(element))
-        let out = Renderer.flatten(doc, baseImage: base, scale: 1)!
-
-        let w = out.width, h = out.height
-        var buf = [UInt8](repeating: 0, count: w * h * 4)
-        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
-        let ctx = CGContext(data: &buf, width: w, height: h, bitsPerComponent: 8,
-                            bytesPerRow: w * 4, space: cs,
-                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        ctx.draw(out, in: CGRect(x: 0, y: 0, width: w, height: h))
-
-        func hasRedPixel(rows: Range<Int>) -> Bool {
-            for y in rows {
-                for x in 10..<230 {
-                    let i = (y * w + x) * 4
-                    if buf[i] > 180 && buf[i + 1] < 100 && buf[i + 2] < 100 { return true }
-                }
-            }
-            return false
-        }
-        XCTAssertTrue(hasRedPixel(rows: 10..<54), "first line should render")
-        XCTAssertTrue(hasRedPixel(rows: 54..<(10 + Int(element.size.height))),
-                      "wrapped lines beyond the original 44pt box should render")
-    }
-
     private func checkerImage(_ size: Int) -> CGImage {
         let cs = CGColorSpace(name: CGColorSpace.sRGB)!
         let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,

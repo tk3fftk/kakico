@@ -149,7 +149,8 @@ public enum Renderer {
         ctx.strokeEllipse(in: e.rect)
     }
 
-    private static func attributedString(for e: TextElement) -> NSAttributedString {
+    private static func drawText(_ e: TextElement, in ctx: CGContext) {
+        guard !e.string.isEmpty else { return }
         let traits: CTFontSymbolicTraits = e.font.bold ? .traitBold : []
         let base = CTFontCreateWithName(e.font.family as CFString, e.font.pointSize, nil)
         let font = CTFontCreateCopyWithSymbolicTraits(base, e.font.pointSize, nil, traits, traits) ?? base
@@ -158,29 +159,8 @@ public enum Renderer {
             NSAttributedString.Key(kCTFontAttributeName as String): font,
             NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
         ]
-        return NSAttributedString(string: e.string, attributes: attrs)
-    }
-
-    /// Size needed to render the full string wrapped at the element's current
-    /// width. CoreText drops lines that don't fit the frame rect, so callers
-    /// must grow `size` to this value or overflowing text silently disappears.
-    /// An empty string yields the one-line minimum height, so editors shrink
-    /// back when all text is deleted.
-    public static func suggestedSize(for e: TextElement) -> CGSize {
-        guard !e.string.isEmpty else {
-            return CGSize(width: e.size.width, height: e.font.pointSize + 8)
-        }
-        let framesetter = CTFramesetterCreateWithAttributedString(attributedString(for: e))
-        let constraint = CGSize(width: e.size.width, height: .greatestFiniteMagnitude)
-        let fit = CTFramesetterSuggestFrameSizeWithConstraints(
-            framesetter, CFRange(location: 0, length: 0), nil, constraint, nil)
-        // +2 guards against fractional-height rounding clipping the last line.
-        return CGSize(width: e.size.width, height: max(ceil(fit.height) + 2, e.font.pointSize + 8))
-    }
-
-    private static func drawText(_ e: TextElement, in ctx: CGContext) {
-        guard !e.string.isEmpty else { return }
-        let framesetter = CTFramesetterCreateWithAttributedString(attributedString(for: e))
+        let attr = NSAttributedString(string: e.string, attributes: attrs)
+        let framesetter = CTFramesetterCreateWithAttributedString(attr)
         let path = CGPath(rect: e.boundingBox(), transform: nil)
         let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
 
