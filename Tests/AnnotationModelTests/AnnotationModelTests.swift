@@ -197,6 +197,30 @@ final class AnnotationModelTests: XCTestCase {
         XCTAssertEqual(FontSpec.suggestedPointSize(forStrokeWidth: 10), 40)
     }
 
+    func testStrokeWidthRoundTripsForStrokedKinds() {
+        let seg = SegmentElement(start: .zero, end: CGPoint(x: 10, y: 0), width: 6)
+        let shape = ShapeElement(rect: CGRect(x: 0, y: 0, width: 10, height: 10), width: 6)
+        let stroked: [Annotation] = [.arrow(seg), .line(seg), .rectangle(shape), .ellipse(shape)]
+        for var ann in stroked {
+            XCTAssertEqual(ann.strokeWidth, 6)
+            ann.setStrokeWidth(12)
+            XCTAssertEqual(ann.strokeWidth, 12)
+        }
+    }
+
+    func testStrokeWidthIsNilAndSetterIsNoOpForUnstrokedKinds() {
+        let unstroked: [Annotation] = [
+            .text(TextElement(origin: .zero, string: "hi")),
+            .pixelate(RedactionElement(rect: CGRect(x: 0, y: 0, width: 10, height: 10))),
+        ]
+        for var ann in unstroked {
+            XCTAssertNil(ann.strokeWidth)
+            let before = ann
+            ann.setStrokeWidth(12)
+            XCTAssertEqual(ann, before)
+        }
+    }
+
     func testDocumentCodableRoundTrip() throws {
         let doc = Document(
             baseImage: .pngData(Data([0, 1, 2, 3])),

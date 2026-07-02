@@ -15,10 +15,14 @@ final class CanvasController {
     /// conservative — equal-value writes also increment.
     @ObservationIgnored private(set) var documentVersion: Int = 0
     var baseImage: CGImage?
-    var selection: ElementID?
+    var selection: ElementID? {
+        didSet { syncStrokeWidthFromSelection() }
+    }
     var tool: Tool = .arrow
     var strokeColor: RGBAColor = .red
-    var strokeWidth: CGFloat = 6
+    var strokeWidth: CGFloat = 6 {
+        didSet { applyStrokeWidthToSelection() }
+    }
     private static let exportBoundsKey = "exportBounds"
     var exportBounds: ExportBounds = {
         if let raw = UserDefaults.standard.string(forKey: CanvasController.exportBoundsKey),
@@ -120,6 +124,7 @@ final class CanvasController {
         document = pre.document
         baseImage = pre.image
         clampSelection()
+        syncStrokeWidthFromSelection()
     }
 
     func redo() {
@@ -128,10 +133,34 @@ final class CanvasController {
         document = next.document
         baseImage = next.image
         clampSelection()
+        syncStrokeWidthFromSelection()
     }
 
     private func clampSelection() {
         if let sel = selection, document?.index(of: sel) == nil { selection = nil }
+    }
+
+    // MARK: - Stroke width ↔ selection
+
+    /// Adopts the selected element's stroke width so the slider starts from
+    /// the current value (and new elements inherit it).
+    private func syncStrokeWidthFromSelection() {
+        guard let sel = selection,
+              let i = document?.index(of: sel),
+              let width = document?.elements[i].strokeWidth else { return }
+        strokeWidth = width
+    }
+
+    /// Applies the global stroke width to the selected element; no-op when the
+    /// value is unchanged (breaks the sync → apply feedback loop) or the
+    /// element has no stroke width. Undo boundaries are the caller's job
+    /// (the slider wraps drags in begin/commitInteraction).
+    private func applyStrokeWidthToSelection() {
+        guard let sel = selection,
+              let doc = document, let i = doc.index(of: sel),
+              let current = doc.elements[i].strokeWidth,
+              current != strokeWidth else { return }
+        document?.mutate(sel) { $0.setStrokeWidth(strokeWidth) }
     }
 
     func deleteSelection() {
