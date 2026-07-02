@@ -30,6 +30,9 @@ extension Color {
     static let miroYellowPressed = Color(red: 0.910, green: 0.722, blue: 0.000) // #E8B800
     static let miroBlue          = Color(red: 0.259, green: 0.384, blue: 1.000) // #4262FF
     static let miroBluePressed   = Color(red: 0.184, green: 0.290, blue: 0.878) // #2F4AE0
+
+    // Semantic
+    static let miroSuccess = Color(red: 0.180, green: 0.647, blue: 0.416) // #2EA56A
 }
 
 extension NSColor {
@@ -134,6 +137,40 @@ struct MiroSecondaryButton: View {
                 .clipShape(.rect(cornerRadius: 10))
         }
         .buttonStyle(MiroPressStyle())
+    }
+}
+
+/// Icon-tile button chrome: hover and pressed background fills so clicks are
+/// clearly acknowledged even for actions with no visible result.
+struct MiroTileButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        TileBody(configuration: configuration)
+    }
+
+    private struct TileBody: View {
+        let configuration: Configuration
+        @Environment(\.colorScheme) private var scheme
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var hovering = false
+
+        private var fill: Color {
+            if configuration.isPressed {
+                return scheme == .dark ? .miroDarkGrid : .miroSurfacePressed
+            }
+            if hovering {
+                return scheme == .dark ? .miroDarkSurface2 : .miroSurfaceGray
+            }
+            return .clear
+        }
+
+        var body: some View {
+            configuration.label
+                .background(RoundedRectangle(cornerRadius: 11).fill(fill))
+                .scaleEffect(configuration.isPressed ? 0.96 : 1)
+                .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7),
+                           value: configuration.isPressed)
+                .onHover { hovering = $0 }
+        }
     }
 }
 
