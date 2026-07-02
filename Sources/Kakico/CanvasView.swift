@@ -482,6 +482,7 @@ final class CanvasNSView: NSView {
                 doc.mutate(id) { annotation in
                     if case .text(var t) = annotation {
                         t.string = newString
+                        t.size = Renderer.suggestedSize(for: t)
                         annotation = .text(t)
                     }
                 }
@@ -515,6 +516,18 @@ final class CanvasNSView: NSView {
 extension CanvasNSView: NSTextViewDelegate {
     func textDidEndEditing(_ notification: Notification) {
         commitTextEditing()
+    }
+
+    // Grow the inline editor with its content; otherwise text past the fixed
+    // frame is invisible while typing (the model rect is synced on commit).
+    func textDidChange(_ notification: Notification) {
+        guard let tv = textEditor, let id = editingTextID,
+              let element = controller?.document?.elements.first(where: { $0.id == id }),
+              case .text(var t) = element else { return }
+        t.string = tv.string
+        let size = Renderer.suggestedSize(for: t)
+        tv.frame = displayInfo.viewRect(forModelRect: CGRect(origin: t.origin, size: size))
+            .insetBy(dx: -2, dy: -2)
     }
 }
 
