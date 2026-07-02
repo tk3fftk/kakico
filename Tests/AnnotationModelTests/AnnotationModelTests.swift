@@ -221,6 +221,28 @@ final class AnnotationModelTests: XCTestCase {
         }
     }
 
+    func testColorRoundTripsForColoredKinds() {
+        let seg = SegmentElement(start: .zero, end: CGPoint(x: 10, y: 0), width: 6)
+        let shape = ShapeElement(rect: CGRect(x: 0, y: 0, width: 10, height: 10), width: 6)
+        let colored: [Annotation] = [
+            .arrow(seg), .line(seg), .rectangle(shape), .ellipse(shape),
+            .text(TextElement(origin: .zero, string: "hi")),
+        ]
+        for var ann in colored {
+            XCTAssertNotNil(ann.color)
+            ann.color = .blue
+            XCTAssertEqual(ann.color, .blue)
+        }
+    }
+
+    func testColorIsNilAndSetterIsNoOpForPixelate() {
+        var ann = Annotation.pixelate(RedactionElement(rect: CGRect(x: 0, y: 0, width: 10, height: 10)))
+        XCTAssertNil(ann.color)
+        let before = ann
+        ann.color = .blue
+        XCTAssertEqual(ann, before)
+    }
+
     func testDocumentCodableRoundTrip() throws {
         let doc = Document(
             baseImage: .pngData(Data([0, 1, 2, 3])),

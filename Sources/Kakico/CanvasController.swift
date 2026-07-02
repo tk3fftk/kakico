@@ -16,10 +16,15 @@ final class CanvasController {
     @ObservationIgnored private(set) var documentVersion: Int = 0
     var baseImage: CGImage?
     var selection: ElementID? {
-        didSet { syncStrokeWidthFromSelection() }
+        didSet {
+            syncStrokeWidthFromSelection()
+            syncColorFromSelection()
+        }
     }
     var tool: Tool = .arrow
-    var strokeColor: RGBAColor = .red
+    var strokeColor: RGBAColor = .red {
+        didSet { applyColorToSelection() }
+    }
     var strokeWidth: CGFloat = 6 {
         didSet { applyStrokeWidthToSelection() }
     }
@@ -47,6 +52,7 @@ final class CanvasController {
     private var undoStack: [State] = []
     private var redoStack: [State] = []
     private var interactionSnapshot: State?
+    @ObservationIgnored private var colorCommitTask: Task<Void, Never>?
 
     var hasDocument: Bool { document != nil }
     var canUndo: Bool { !undoStack.isEmpty }
@@ -76,6 +82,9 @@ final class CanvasController {
         selection = nil
         undoStack.removeAll()
         redoStack.removeAll()
+        colorCommitTask?.cancel()
+        colorCommitTask = nil
+        interactionSnapshot = nil
     }
 
     /// Loads an image from the general pasteboard, if present.
@@ -95,6 +104,7 @@ final class CanvasController {
 
     /// Capture state at the start of an interaction (e.g. mouseDown).
     func beginInteraction() {
+        flushPendingColorCommit()
         guard let document else { return }
         interactionSnapshot = State(document: document, image: baseImage)
     }
@@ -109,6 +119,7 @@ final class CanvasController {
 
     /// One-shot mutation with undo registration.
     func perform(_ change: (inout Document) -> Void) {
+        flushPendingColorCommit()
         guard var doc = document else { return }
         let pre = State(document: doc, image: baseImage)
         change(&doc)
@@ -119,6 +130,7 @@ final class CanvasController {
     }
 
     func undo() {
+        flushPendingColorCommit()
         guard let pre = undoStack.popLast(), let current = document else { return }
         redoStack.append(State(document: current, image: baseImage))
         document = pre.document
@@ -127,6 +139,7 @@ final class CanvasController {
     }
 
     func redo() {
+        flushPendingColorCommit()
         guard let next = redoStack.popLast(), let current = document else { return }
         undoStack.append(State(document: current, image: baseImage))
         document = next.document
@@ -137,6 +150,7 @@ final class CanvasController {
     private func clampSelection() {
         if let sel = selection, document?.index(of: sel) == nil { selection = nil }
         syncStrokeWidthFromSelection()
+        syncColorFromSelection()
     }
 
     // MARK: - Stroke width ↔ selection
@@ -161,6 +175,48 @@ final class CanvasController {
               let current = doc.elements[i].strokeWidth,
               current != strokeWidth else { return }
         document?.mutate(sel) { $0.strokeWidth = strokeWidth }
+    }
+
+    // MARK: - Color ↔ selection
+
+    /// Adopts the selected element's color so the picker starts from the
+    /// current value (and new elements inherit it).
+    private func syncColorFromSelection() {
+        guard let sel = selection,
+              let i = document?.index(of: sel),
+              let color = document?.elements[i].color,
+              color != strokeColor else { return }
+        strokeColor = color
+    }
+
+    /// Applies the global stroke color to the selected element; no-op when the
+    /// value is unchanged (breaks the sync → apply feedback loop) or the
+    /// element has no color. The color picker has no drag begin/end events, so
+    /// the undo boundary is debounced: changes within 500ms coalesce into one
+    /// undo step.
+    private func applyColorToSelection() {
+        guard let sel = selection,
+              let doc = document, let i = doc.index(of: sel),
+              let current = doc.elements[i].color,
+              current != strokeColor else { return }
+        if colorCommitTask == nil { beginInteraction() }
+        document?.mutate(sel) { $0.color = strokeColor }
+        colorCommitTask?.cancel()
+        colorCommitTask = Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            colorCommitTask = nil
+            commitInteraction()
+        }
+    }
+
+    /// Commits a debounce-pending color change immediately so a following
+    /// interaction or undo/redo doesn't clobber its snapshot.
+    private func flushPendingColorCommit() {
+        guard colorCommitTask != nil else { return }
+        colorCommitTask?.cancel()
+        colorCommitTask = nil
+        commitInteraction()
     }
 
     func deleteSelection() {

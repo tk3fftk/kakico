@@ -51,6 +51,30 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
         }
     }
 
+    /// Color of the wrapped element; nil for kinds without one (pixelate).
+    /// Setting is a no-op for those kinds and for nil.
+    public var color: RGBAColor? {
+        get {
+            switch self {
+            case .arrow(let e), .line(let e): return e.color
+            case .rectangle(let e), .ellipse(let e): return e.color
+            case .text(let e): return e.color
+            case .pixelate: return nil
+            }
+        }
+        set {
+            guard let color = newValue else { return }
+            switch self {
+            case .arrow(var e): e.color = color; self = .arrow(e)
+            case .line(var e): e.color = color; self = .line(e)
+            case .rectangle(var e): e.color = color; self = .rectangle(e)
+            case .ellipse(var e): e.color = color; self = .ellipse(e)
+            case .text(var e): e.color = color; self = .text(e)
+            case .pixelate: break
+            }
+        }
+    }
+
     /// Skitch-style placement: a plain click drops a degenerate (zero-size)
     /// element; give it a sensible default size anchored at the click point so
     /// the object appears without a drag. Non-degenerate (drag-created)
