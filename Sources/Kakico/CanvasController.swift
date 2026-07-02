@@ -16,10 +16,7 @@ final class CanvasController {
     @ObservationIgnored private(set) var documentVersion: Int = 0
     var baseImage: CGImage?
     var selection: ElementID? {
-        didSet {
-            syncStrokeWidthFromSelection()
-            syncColorFromSelection()
-        }
+        didSet { syncToolStateFromSelection() }
     }
     var tool: Tool = .arrow
     var strokeColor: RGBAColor = .red {
@@ -52,7 +49,7 @@ final class CanvasController {
     private var undoStack: [State] = []
     private var redoStack: [State] = []
     private var interactionSnapshot: State?
-    @ObservationIgnored private var colorCommitTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingCommitTask: Task<Void, Never>?
 
     var hasDocument: Bool { document != nil }
     var canUndo: Bool { !undoStack.isEmpty }
@@ -82,8 +79,8 @@ final class CanvasController {
         selection = nil
         undoStack.removeAll()
         redoStack.removeAll()
-        colorCommitTask?.cancel()
-        colorCommitTask = nil
+        pendingCommitTask?.cancel()
+        pendingCommitTask = nil
         interactionSnapshot = nil
     }
 
@@ -104,7 +101,7 @@ final class CanvasController {
 
     /// Capture state at the start of an interaction (e.g. mouseDown).
     func beginInteraction() {
-        flushPendingColorCommit()
+        flushPendingCommit()
         guard let document else { return }
         interactionSnapshot = State(document: document, image: baseImage)
     }
@@ -119,7 +116,7 @@ final class CanvasController {
 
     /// One-shot mutation with undo registration.
     func perform(_ change: (inout Document) -> Void) {
-        flushPendingColorCommit()
+        flushPendingCommit()
         guard var doc = document else { return }
         let pre = State(document: doc, image: baseImage)
         change(&doc)
@@ -130,7 +127,7 @@ final class CanvasController {
     }
 
     func undo() {
-        flushPendingColorCommit()
+        flushPendingCommit()
         guard let pre = undoStack.popLast(), let current = document else { return }
         redoStack.append(State(document: current, image: baseImage))
         document = pre.document
@@ -139,7 +136,7 @@ final class CanvasController {
     }
 
     func redo() {
-        flushPendingColorCommit()
+        flushPendingCommit()
         guard let next = redoStack.popLast(), let current = document else { return }
         undoStack.append(State(document: current, image: baseImage))
         document = next.document
@@ -149,20 +146,18 @@ final class CanvasController {
 
     private func clampSelection() {
         if let sel = selection, document?.index(of: sel) == nil { selection = nil }
-        syncStrokeWidthFromSelection()
-        syncColorFromSelection()
+        syncToolStateFromSelection()
     }
 
-    // MARK: - Stroke width ↔ selection
+    // MARK: - Tool state ↔ selection
 
-    /// Adopts the selected element's stroke width so the slider starts from
-    /// the current value (and new elements inherit it).
-    private func syncStrokeWidthFromSelection() {
-        guard let sel = selection,
-              let i = document?.index(of: sel),
-              let width = document?.elements[i].strokeWidth,
-              width != strokeWidth else { return }
-        strokeWidth = width
+    /// Adopts the selected element's stroke width and color so the controls
+    /// start from the current values (and new elements inherit them).
+    private func syncToolStateFromSelection() {
+        guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return }
+        let element = doc.elements[i]
+        if let width = element.strokeWidth, width != strokeWidth { strokeWidth = width }
+        if let color = element.color, color != strokeColor { strokeColor = color }
     }
 
     /// Applies the global stroke width to the selected element; no-op when the
@@ -174,19 +169,7 @@ final class CanvasController {
               let doc = document, let i = doc.index(of: sel),
               let current = doc.elements[i].strokeWidth,
               current != strokeWidth else { return }
-        document?.mutate(sel) { $0.strokeWidth = strokeWidth }
-    }
-
-    // MARK: - Color ↔ selection
-
-    /// Adopts the selected element's color so the picker starts from the
-    /// current value (and new elements inherit it).
-    private func syncColorFromSelection() {
-        guard let sel = selection,
-              let i = document?.index(of: sel),
-              let color = document?.elements[i].color,
-              color != strokeColor else { return }
-        strokeColor = color
+        document?.elements[i].strokeWidth = strokeWidth
     }
 
     /// Applies the global stroke color to the selected element; no-op when the
@@ -199,23 +182,23 @@ final class CanvasController {
               let doc = document, let i = doc.index(of: sel),
               let current = doc.elements[i].color,
               current != strokeColor else { return }
-        if colorCommitTask == nil { beginInteraction() }
-        document?.mutate(sel) { $0.color = strokeColor }
-        colorCommitTask?.cancel()
-        colorCommitTask = Task {
+        if pendingCommitTask == nil { beginInteraction() }
+        document?.elements[i].color = strokeColor
+        pendingCommitTask?.cancel()
+        pendingCommitTask = Task {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
-            colorCommitTask = nil
+            pendingCommitTask = nil
             commitInteraction()
         }
     }
 
-    /// Commits a debounce-pending color change immediately so a following
+    /// Commits a debounce-pending change immediately so a following
     /// interaction or undo/redo doesn't clobber its snapshot.
-    private func flushPendingColorCommit() {
-        guard colorCommitTask != nil else { return }
-        colorCommitTask?.cancel()
-        colorCommitTask = nil
+    private func flushPendingCommit() {
+        guard pendingCommitTask != nil else { return }
+        pendingCommitTask?.cancel()
+        pendingCommitTask = nil
         commitInteraction()
     }
 
