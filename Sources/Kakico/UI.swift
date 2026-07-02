@@ -87,6 +87,19 @@ struct EmptyState: View {
     }
 }
 
+// MARK: - Icon tiles
+
+/// Shared icon-in-tile label used by the palette and action-bar buttons; the
+/// content shape matches `MiroTileButtonStyle`'s 11pt hover/pressed fill.
+private func tileIcon(_ symbol: String, tint: Color,
+                      iconSize: CGFloat = 20, tile: CGFloat = 40) -> some View {
+    Image(systemName: symbol)
+        .font(.system(size: iconSize, weight: .medium))
+        .foregroundStyle(tint)
+        .frame(width: tile, height: tile)
+        .contentShape(.rect(cornerRadius: 11))
+}
+
 // MARK: - Floating tool palette
 
 struct ToolPalette: View {
@@ -110,11 +123,8 @@ struct ToolPalette: View {
                         withAnimation(.easeOut(duration: 0.12)) { controller.tool = tool }
                     }
                 } label: {
-                    Image(systemName: tool.symbol)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(controller.tool == tool ? Color.miroInk : MiroTheme.textSecondary(scheme))
-                        .frame(width: 40, height: 40)
-                        .contentShape(.rect(cornerRadius: 11))
+                    tileIcon(tool.symbol,
+                             tint: controller.tool == tool ? Color.miroInk : MiroTheme.textSecondary(scheme))
                         .background(
                             RoundedRectangle(cornerRadius: 11)
                                 .fill(controller.tool == tool ? Color.miroYellow : .clear)
@@ -138,11 +148,7 @@ struct ToolPalette: View {
             Button {
                 showsStrokeWidth.toggle()
             } label: {
-                Image(systemName: "lineweight")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(MiroTheme.textSecondary(scheme))
-                    .frame(width: 40, height: 40)
-                    .contentShape(.rect(cornerRadius: 11))
+                tileIcon("lineweight", tint: MiroTheme.textSecondary(scheme))
             }
             .buttonStyle(MiroTileButtonStyle())
             .help("Stroke width")
@@ -196,11 +202,7 @@ struct ActionBar: View {
     private func actionTile(_ symbol: String, help: String, tint: Color? = nil,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(tint ?? MiroTheme.textSecondary(scheme))
-                .frame(width: 36, height: 36)
-                .contentShape(.rect(cornerRadius: 11))
+            tileIcon(symbol, tint: tint ?? MiroTheme.textSecondary(scheme), iconSize: 16, tile: 36)
         }
         .buttonStyle(MiroTileButtonStyle())
         .help(help)

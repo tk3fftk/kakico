@@ -7,29 +7,23 @@ extension Color {
     // Board & Chrome (Light)
     static let miroBoard          = Color(red: 0.961, green: 0.961, blue: 0.969) // #F5F5F7
     static let miroGrid           = Color(red: 0.843, green: 0.843, blue: 0.871) // #D7D7DE
-    static let miroChrome         = Color.white                                   // #FFFFFF
     static let miroSurfaceGray    = Color(red: 0.945, green: 0.945, blue: 0.957) // #F1F1F4
     static let miroSurfacePressed = Color(red: 0.902, green: 0.902, blue: 0.922) // #E6E6EB
     static let miroDivider        = Color(red: 0.890, green: 0.890, blue: 0.910) // #E3E3E8
 
     // Board & Chrome (Dark)
-    static let miroDarkCanvas   = Color(red: 0.106, green: 0.106, blue: 0.122) // #1B1B1F
     static let miroDarkBoard    = Color(red: 0.125, green: 0.125, blue: 0.141) // #202024
     static let miroDarkGrid     = Color(red: 0.220, green: 0.220, blue: 0.247) // #38383F
-    static let miroDarkSurface1 = Color(red: 0.149, green: 0.149, blue: 0.169) // #26262B
     static let miroDarkSurface2 = Color(red: 0.192, green: 0.192, blue: 0.220) // #313138
 
     // Text
     static let miroInk             = Color(red: 0.020, green: 0.000, blue: 0.220) // #050038
     static let miroTextSecondary   = Color(red: 0.420, green: 0.420, blue: 0.482) // #6B6B7B
-    static let miroTextTertiary    = Color(red: 0.604, green: 0.604, blue: 0.643) // #9A9AA4
     static let miroDarkTextPrimary = Color(red: 0.925, green: 0.925, blue: 0.937) // #ECECEF
 
     // Brand / Interactive
-    static let miroYellow        = Color(red: 1.000, green: 0.816, blue: 0.184) // #FFD02F
-    static let miroYellowPressed = Color(red: 0.910, green: 0.722, blue: 0.000) // #E8B800
-    static let miroBlue          = Color(red: 0.259, green: 0.384, blue: 1.000) // #4262FF
-    static let miroBluePressed   = Color(red: 0.184, green: 0.290, blue: 0.878) // #2F4AE0
+    static let miroYellow = Color(red: 1.000, green: 0.816, blue: 0.184) // #FFD02F
+    static let miroBlue   = Color(red: 0.259, green: 0.384, blue: 1.000) // #4262FF
 
     // Semantic
     static let miroSuccess = Color(red: 0.180, green: 0.647, blue: 0.416) // #2EA56A

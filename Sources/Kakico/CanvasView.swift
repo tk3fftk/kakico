@@ -484,6 +484,12 @@ final class CanvasNSView: NSView {
 
     // MARK: Inline text editing
 
+    /// Editor frame for a text element's model rect; the -2 inset leaves room
+    /// for the editor chrome around the rendered text.
+    private func textEditorFrame(forModelRect rect: CGRect) -> NSRect {
+        displayInfo.viewRect(forModelRect: rect).insetBy(dx: -2, dy: -2)
+    }
+
     private func beginTextEditing(for id: ElementID) {
         guard let controller,
               let element = controller.document?.elements.first(where: { $0.id == id }),
@@ -491,7 +497,7 @@ final class CanvasNSView: NSView {
         commitTextEditing()
 
         let info = displayInfo
-        let tv = MinimalTextView(frame: info.viewRect(forModelRect: element.boundingBox()).insetBy(dx: -2, dy: -2))
+        let tv = MinimalTextView(frame: textEditorFrame(forModelRect: element.boundingBox()))
         tv.string = text.string
         tv.font = nsFont(for: text.font, scale: info.scale)
         tv.textColor = nsColor(text.color)
@@ -564,8 +570,7 @@ extension CanvasNSView: NSTextViewDelegate {
               case .text(var t) = element else { return }
         t.string = tv.string
         let size = Renderer.suggestedSize(for: t)
-        let newFrame = displayInfo.viewRect(forModelRect: CGRect(origin: t.origin, size: size))
-            .insetBy(dx: -2, dy: -2)
+        let newFrame = textEditorFrame(forModelRect: CGRect(origin: t.origin, size: size))
         if tv.frame != newFrame { tv.frame = newFrame }
     }
 }
