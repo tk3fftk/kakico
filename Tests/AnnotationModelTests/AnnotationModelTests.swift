@@ -203,7 +203,7 @@ final class AnnotationModelTests: XCTestCase {
         let stroked: [Annotation] = [.arrow(seg), .line(seg), .rectangle(shape), .ellipse(shape)]
         for var ann in stroked {
             XCTAssertEqual(ann.strokeWidth, 6)
-            ann.setStrokeWidth(12)
+            ann.strokeWidth = 12
             XCTAssertEqual(ann.strokeWidth, 12)
         }
     }
@@ -216,7 +216,7 @@ final class AnnotationModelTests: XCTestCase {
         for var ann in unstroked {
             XCTAssertNil(ann.strokeWidth)
             let before = ann
-            ann.setStrokeWidth(12)
+            ann.strokeWidth = 12
             XCTAssertEqual(ann, before)
         }
     }

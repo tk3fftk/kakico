@@ -124,7 +124,6 @@ final class CanvasController {
         document = pre.document
         baseImage = pre.image
         clampSelection()
-        syncStrokeWidthFromSelection()
     }
 
     func redo() {
@@ -133,11 +132,11 @@ final class CanvasController {
         document = next.document
         baseImage = next.image
         clampSelection()
-        syncStrokeWidthFromSelection()
     }
 
     private func clampSelection() {
         if let sel = selection, document?.index(of: sel) == nil { selection = nil }
+        syncStrokeWidthFromSelection()
     }
 
     // MARK: - Stroke width ↔ selection
@@ -147,7 +146,8 @@ final class CanvasController {
     private func syncStrokeWidthFromSelection() {
         guard let sel = selection,
               let i = document?.index(of: sel),
-              let width = document?.elements[i].strokeWidth else { return }
+              let width = document?.elements[i].strokeWidth,
+              width != strokeWidth else { return }
         strokeWidth = width
     }
 
@@ -160,7 +160,7 @@ final class CanvasController {
               let doc = document, let i = doc.index(of: sel),
               let current = doc.elements[i].strokeWidth,
               current != strokeWidth else { return }
-        document?.mutate(sel) { $0.setStrokeWidth(strokeWidth) }
+        document?.mutate(sel) { $0.strokeWidth = strokeWidth }
     }
 
     func deleteSelection() {

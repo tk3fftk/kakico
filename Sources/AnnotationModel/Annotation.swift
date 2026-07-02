@@ -29,23 +29,25 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     public func hitTest(_ p: CGPoint, tolerance: CGFloat) -> Bool { geometry.hitTest(p, tolerance: tolerance) }
     public func handles() -> [Handle] { geometry.handles() }
 
-    /// Stroke width of the wrapped element; nil for kinds without one (text, pixelate).
+    /// Stroke width of the wrapped element; nil for kinds without one
+    /// (text, pixelate). Setting is a no-op for those kinds and for nil.
     public var strokeWidth: CGFloat? {
-        switch self {
-        case .arrow(let e), .line(let e): return e.width
-        case .rectangle(let e), .ellipse(let e): return e.width
-        case .text, .pixelate: return nil
+        get {
+            switch self {
+            case .arrow(let e), .line(let e): return e.width
+            case .rectangle(let e), .ellipse(let e): return e.width
+            case .text, .pixelate: return nil
+            }
         }
-    }
-
-    /// Sets the stroke width; no-op for kinds without one (text, pixelate).
-    public mutating func setStrokeWidth(_ width: CGFloat) {
-        switch self {
-        case .arrow(var e): e.width = width; self = .arrow(e)
-        case .line(var e): e.width = width; self = .line(e)
-        case .rectangle(var e): e.width = width; self = .rectangle(e)
-        case .ellipse(var e): e.width = width; self = .ellipse(e)
-        case .text, .pixelate: break
+        set {
+            guard let width = newValue else { return }
+            switch self {
+            case .arrow(var e): e.width = width; self = .arrow(e)
+            case .line(var e): e.width = width; self = .line(e)
+            case .rectangle(var e): e.width = width; self = .rectangle(e)
+            case .ellipse(var e): e.width = width; self = .ellipse(e)
+            case .text, .pixelate: break
+            }
         }
     }
 
