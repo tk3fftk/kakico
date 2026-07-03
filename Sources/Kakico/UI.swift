@@ -17,12 +17,6 @@ func rgbaColor(from color: Color) -> RGBAColor {
                      b: Double(ns.blueComponent), a: Double(ns.alphaComponent))
 }
 
-/// Skitch-style stroke color presets, top-to-bottom.
-let colorPresets: [(name: String, color: RGBAColor)] = [
-    ("Red", .red), ("Orange", .orange), ("Yellow", .yellow), ("Green", .green),
-    ("Blue", .blue), ("Pink", .pink), ("White", .white), ("Black", .black),
-]
-
 // MARK: - Content
 
 struct ContentView: View {
@@ -112,6 +106,14 @@ private func tileIcon(_ symbol: String, tint: Color,
         .contentShape(.rect(cornerRadius: 11))
 }
 
+/// Horizontal hairline separating groups inside a floating panel.
+private func paletteDivider(width: CGFloat, verticalPadding: CGFloat) -> some View {
+    Rectangle()
+        .fill(Color.miroDivider)
+        .frame(width: width, height: 1)
+        .padding(.vertical, verticalPadding)
+}
+
 // MARK: - Floating tool palette
 
 struct ToolPalette: View {
@@ -121,16 +123,11 @@ struct ToolPalette: View {
     @State private var showsStrokeWidth = false
     @State private var showsColorPresets = false
 
-    private var colorBinding: Binding<Color> {
-        Binding(get: { Color(controller.strokeColor) },
-                set: { controller.strokeColor = rgbaColor(from: $0) })
-    }
-
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             palette
             if showsColorPresets {
-                ColorPresetPanel(controller: controller, colorBinding: colorBinding)
+                ColorPresetPanel(controller: controller)
                     .miroFloatingPanel()
                     .transition(.scale(scale: 0.95, anchor: .leading).combined(with: .opacity))
             }
@@ -160,10 +157,7 @@ struct ToolPalette: View {
                 .keyboardShortcut(.none)
             }
 
-            Rectangle()
-                .fill(Color.miroDivider)
-                .frame(width: 28, height: 1)
-                .padding(.vertical, 4)
+            paletteDivider(width: 28, verticalPadding: 4)
 
             Button {
                 showsColorPresets.toggle()
@@ -211,11 +205,21 @@ struct ToolPalette: View {
 /// the palette swatch button toggles it closed.
 private struct ColorPresetPanel: View {
     var controller: CanvasController
-    var colorBinding: Binding<Color>
+
+    /// Skitch-style stroke color presets, top-to-bottom.
+    private static let presets: [(name: String, color: RGBAColor)] = [
+        ("Red", .red), ("Orange", .orange), ("Yellow", .yellow), ("Green", .green),
+        ("Blue", .blue), ("Pink", .pink), ("White", .white), ("Black", .black),
+    ]
+
+    private var colorBinding: Binding<Color> {
+        Binding(get: { Color(controller.strokeColor) },
+                set: { controller.strokeColor = rgbaColor(from: $0) })
+    }
 
     var body: some View {
         VStack(spacing: 6) {
-            ForEach(colorPresets, id: \.name) { preset in
+            ForEach(Self.presets, id: \.name) { preset in
                 Button {
                     controller.selectStrokeColor(preset.color)
                 } label: {
@@ -234,10 +238,7 @@ private struct ColorPresetPanel: View {
                 .help(preset.name)
             }
 
-            Rectangle()
-                .fill(Color.miroDivider)
-                .frame(width: 22, height: 1)
-                .padding(.vertical, 2)
+            paletteDivider(width: 22, verticalPadding: 2)
 
             ColorPicker("", selection: colorBinding, supportsOpacity: true)
                 .labelsHidden()
