@@ -55,10 +55,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toolKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self,
                   event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty,
-                  !(NSApp.keyWindow?.firstResponder is NSTextView),
                   let chars = event.charactersIgnoringModifiers,
                   let index = Int(chars),
-                  Tool.allCases.indices.contains(index) else { return event }
+                  Tool.allCases.indices.contains(index),
+                  !(NSApp.keyWindow?.firstResponder is NSTextView) else { return event }
             self.controller.tool = Tool.allCases[index]
             return nil
         }
