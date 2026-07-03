@@ -166,8 +166,7 @@ struct ToolPalette: View {
                                           set: { controller.strokeWidth = CGFloat($0) }),
                            in: 1...40,
                            onEditingChanged: { editing in
-                               if editing { controller.beginInteraction() }
-                               else { controller.commitInteraction() }
+                               if editing { controller.beginInteraction() } else { controller.commitInteraction() }
                            })
                     .frame(width: 140)
                     .tint(.miroBlue)
