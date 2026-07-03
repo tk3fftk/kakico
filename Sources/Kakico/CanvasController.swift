@@ -217,6 +217,15 @@ final class CanvasController {
         }
     }
 
+    /// Discrete color choice (preset swatch tap): applies through the normal
+    /// `didSet` path, then flushes the debounce so the tap is one undo step
+    /// instead of coalescing with neighboring changes.
+    func selectStrokeColor(_ color: RGBAColor) {
+        flushPendingCommit()
+        strokeColor = color
+        flushPendingCommit()
+    }
+
     /// Commits a debounce-pending change immediately so a following
     /// interaction or undo/redo doesn't clobber its snapshot.
     private func flushPendingCommit() {

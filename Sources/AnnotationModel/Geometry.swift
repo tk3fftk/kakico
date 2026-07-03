@@ -16,9 +16,11 @@ public struct RGBAColor: Codable, Equatable, Sendable {
     }
 
     public static let red = RGBAColor(r: 0.90, g: 0.16, b: 0.22)
+    public static let orange = RGBAColor(r: 0.98, g: 0.55, b: 0.10)
     public static let yellow = RGBAColor(r: 1.0, g: 0.80, b: 0.0)
     public static let green = RGBAColor(r: 0.16, g: 0.70, b: 0.30)
     public static let blue = RGBAColor(r: 0.0, g: 0.48, b: 1.0)
+    public static let pink = RGBAColor(r: 0.96, g: 0.40, b: 0.68)
     public static let black = RGBAColor(r: 0, g: 0, b: 0)
     public static let white = RGBAColor(r: 1, g: 1, b: 1)
 }
