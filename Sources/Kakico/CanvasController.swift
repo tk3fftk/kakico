@@ -20,6 +20,9 @@ final class CanvasController {
         didSet { syncToolStateFromSelection() }
     }
     var tool: Tool = .arrow
+    /// True while the inline text annotation editor is active; disables the
+    /// unmodified single-letter tool shortcuts so they don't steal typing.
+    var isEditingText = false
     var strokeColor: RGBAColor = .red {
         didSet { applyColorToSelection() }
     }

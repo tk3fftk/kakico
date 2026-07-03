@@ -29,6 +29,7 @@ struct KakicoApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = CanvasController()
     private var pasteKeyMonitor: Any?
+    private var toolKeyMonitor: Any?
     private var editMenuDelegate: EditMenuFilter?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -46,6 +47,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if NSApp.keyWindow?.firstResponder is NSTextView { return event }
             let controller = self.controller
             DispatchQueue.main.async { ExportService.confirmAndPasteImage(controller) }
+            return nil
+        }
+
+        // Legacy digit shortcuts (0-7, the Tool.allCases order) kept alongside
+        // the Miro-style letters shown in the Tools menu.
+        toolKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self,
+                  event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty,
+                  !(NSApp.keyWindow?.firstResponder is NSTextView),
+                  let chars = event.charactersIgnoringModifiers,
+                  let index = Int(chars),
+                  Tool.allCases.indices.contains(index) else { return event }
+            self.controller.tool = Tool.allCases[index]
             return nil
         }
 
@@ -130,9 +144,13 @@ struct AppCommands: Commands {
                 .disabled(!controller.canRedo)
         }
         CommandMenu("Tools") {
-            ForEach(Array(Tool.allCases.enumerated()), id: \.element.id) { index, tool in
+            // Unmodified letter equivalents would steal typing from the inline
+            // text editor, so disable them while it is active. The legacy 0-7
+            // digit shortcuts are handled by the key monitor in AppDelegate.
+            ForEach(Tool.allCases) { tool in
                 Button(tool.label) { controller.tool = tool }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: [])
+                    .keyboardShortcut(KeyEquivalent(tool.shortcutKey), modifiers: [])
+                    .disabled(controller.isEditingText)
             }
         }
     }

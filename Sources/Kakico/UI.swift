@@ -137,7 +137,7 @@ struct ToolPalette: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .help(tool.label)
+                .help("\(tool.label) (\(String(tool.shortcutKey).uppercased()))")
                 .keyboardShortcut(.none)
             }
 

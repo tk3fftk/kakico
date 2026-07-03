@@ -529,6 +529,7 @@ final class CanvasNSView: NSView {
         window?.makeFirstResponder(tv)
         textEditor = tv
         editingTextID = id
+        controller.isEditingText = true
     }
 
     func commitTextEditing() {
@@ -537,6 +538,7 @@ final class CanvasNSView: NSView {
         tv.removeFromSuperview()
         textEditor = nil
         editingTextID = nil
+        controller.isEditingText = false
 
         if newString.isEmpty {
             controller.perform { $0.remove(id) }

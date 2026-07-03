@@ -25,6 +25,20 @@ enum Tool: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Miro-style single-letter shortcut for the tool.
+    var shortcutKey: Character {
+        switch self {
+        case .select: return "v"
+        case .arrow: return "a"
+        case .line: return "l"
+        case .rectangle: return "r"
+        case .ellipse: return "o"
+        case .text: return "t"
+        case .pixelate: return "p"
+        case .crop: return "c"
+        }
+    }
+
     /// SF Symbol name for the palette button.
     var symbol: String {
         switch self {
