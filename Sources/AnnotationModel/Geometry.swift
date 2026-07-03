@@ -39,6 +39,12 @@ public struct FontSpec: Codable, Equatable, Sendable {
     public static func suggestedPointSize(forStrokeWidth width: CGFloat) -> Double {
         Double(max(18, width * 4))
     }
+
+    /// Inverse of `suggestedPointSize(forStrokeWidth:)`, used to reflect a
+    /// selected text's size on the stroke-width slider.
+    public static func strokeWidth(forPointSize pointSize: Double) -> CGFloat {
+        CGFloat(pointSize / 4)
+    }
 }
 
 /// A reference to the base image. Either an absolute file path or PNG bytes

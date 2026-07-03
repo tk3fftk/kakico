@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import AppKit
 import AnnotationModel
+import AnnotationRender
 
 /// Holds the document, the loaded base image, the current tool/selection, and
 /// a snapshot-based undo stack. The single source of truth for the UI.
@@ -156,20 +157,32 @@ final class CanvasController {
     private func syncToolStateFromSelection() {
         guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return }
         let element = doc.elements[i]
-        if let width = element.strokeWidth, width != strokeWidth { strokeWidth = width }
+        if case .text(let t) = element {
+            let width = FontSpec.strokeWidth(forPointSize: t.font.pointSize)
+            if width != strokeWidth { strokeWidth = width }
+        } else if let width = element.strokeWidth, width != strokeWidth {
+            strokeWidth = width
+        }
         if let color = element.color, color != strokeColor { strokeColor = color }
     }
 
     /// Applies the global stroke width to the selected element; no-op when the
     /// value is unchanged (breaks the sync → apply feedback loop) or the
-    /// element has no stroke width. Undo boundaries are the caller's job
+    /// element has no stroke width. For text the width maps to the font point
+    /// size (same mapping as creation) and the box height is re-measured so
+    /// wrapped text doesn't get clipped. Undo boundaries are the caller's job
     /// (the slider wraps drags in begin/commitInteraction).
     private func applyStrokeWidthToSelection() {
-        guard let sel = selection,
-              let doc = document, let i = doc.index(of: sel),
-              let current = doc.elements[i].strokeWidth,
-              current != strokeWidth else { return }
-        document?.elements[i].strokeWidth = strokeWidth
+        guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return }
+        if case .text(var t) = doc.elements[i] {
+            let pointSize = FontSpec.suggestedPointSize(forStrokeWidth: strokeWidth)
+            guard t.font.pointSize != pointSize else { return }
+            t.font.pointSize = pointSize
+            t.size = Renderer.suggestedSize(for: t)
+            document?.elements[i] = .text(t)
+        } else if let current = doc.elements[i].strokeWidth, current != strokeWidth {
+            document?.elements[i].strokeWidth = strokeWidth
+        }
     }
 
     /// Applies the global stroke color to the selected element; no-op when the

@@ -197,6 +197,14 @@ final class AnnotationModelTests: XCTestCase {
         XCTAssertEqual(FontSpec.suggestedPointSize(forStrokeWidth: 10), 40)
     }
 
+    func testStrokeWidthForPointSizeInvertsSuggestedPointSize() {
+        for width: CGFloat in [4.5, 6, 10, 40] {
+            let pointSize = FontSpec.suggestedPointSize(forStrokeWidth: width)
+            XCTAssertEqual(FontSpec.strokeWidth(forPointSize: pointSize), width)
+        }
+        XCTAssertEqual(FontSpec.strokeWidth(forPointSize: 18), 4.5, "clamped sizes map back above the clamp point")
+    }
+
     func testStrokeWidthRoundTripsForStrokedKinds() {
         let seg = SegmentElement(start: .zero, end: CGPoint(x: 10, y: 0), width: 6)
         let shape = ShapeElement(rect: CGRect(x: 0, y: 0, width: 10, height: 10), width: 6)
