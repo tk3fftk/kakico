@@ -47,6 +47,10 @@ final class CanvasController {
         var image: CGImage?
     }
 
+    /// True while `syncToolStateFromSelection()` writes the tool state, so the
+    /// setters' `didSet` apply hooks don't re-fire back into the document.
+    @ObservationIgnored private var isSyncing = false
+
     private var undoStack: [State] = []
     private var redoStack: [State] = []
     private var interactionSnapshot: State?
@@ -156,6 +160,8 @@ final class CanvasController {
     /// start from the current values (and new elements inherit them).
     private func syncToolStateFromSelection() {
         guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return }
+        isSyncing = true
+        defer { isSyncing = false }
         let element = doc.elements[i]
         if case .text(let t) = element {
             let width = FontSpec.strokeWidth(forPointSize: t.font.pointSize)
@@ -173,6 +179,7 @@ final class CanvasController {
     /// wrapped text doesn't get clipped. Undo boundaries are the caller's job
     /// (the slider wraps drags in begin/commitInteraction).
     private func applyStrokeWidthToSelection() {
+        guard !isSyncing else { return }
         guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return }
         if case .text(var t) = doc.elements[i] {
             let pointSize = FontSpec.suggestedPointSize(forStrokeWidth: strokeWidth)
@@ -191,6 +198,7 @@ final class CanvasController {
     /// the undo boundary is debounced: changes within 500ms coalesce into one
     /// undo step.
     private func applyColorToSelection() {
+        guard !isSyncing else { return }
         guard let sel = selection,
               let doc = document, let i = doc.index(of: sel),
               let current = doc.elements[i].color,
