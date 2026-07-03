@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the Miro-style letters shown in the Tools menu.
         toolKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self,
-                  event.modifierFlags.intersection([.command, .shift, .option, .control]).isEmpty,
+                  event.modifierFlags.isDisjoint(with: [.command, .shift, .option, .control]),
                   let chars = event.charactersIgnoringModifiers,
                   let index = Int(chars),
                   Tool.allCases.indices.contains(index),
