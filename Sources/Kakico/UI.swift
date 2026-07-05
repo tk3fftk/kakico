@@ -183,19 +183,68 @@ struct ToolPalette: View {
                 HStack(spacing: 8) {
                     Image(systemName: "lineweight")
                         .foregroundStyle(MiroTheme.textSecondary(scheme))
-                    Slider(value: Binding(get: { Double(controller.strokeWidth) },
-                                          set: { controller.strokeWidth = CGFloat($0) }),
-                           in: 1...40,
-                           onEditingChanged: { editing in
-                               if editing { controller.beginInteraction() } else { controller.commitInteraction() }
-                           })
-                    .frame(width: 140)
-                    .tint(.miroBlue)
+                    MiroSlider(
+                        value: Binding(get: { controller.strokeWidth },
+                                       set: { controller.strokeWidth = $0 }),
+                        range: 1...40,
+                        onEditingChanged: { editing in
+                            if editing { controller.beginInteraction() } else { controller.commitInteraction() }
+                        },
+                        width: 140
+                    )
                 }
                 .padding(12)
             }
         }
         .miroFloatingPanel()
+    }
+}
+
+/// Pure-SwiftUI slider. The native `Slider` wraps an NSSlider whose knob
+/// renders in the inactive (dark) style inside a non-key popover window until
+/// clicked; drawing our own knob keeps it white regardless of window key state.
+private struct MiroSlider: View {
+    @Binding var value: CGFloat
+    let range: ClosedRange<CGFloat>
+    var onEditingChanged: (Bool) -> Void = { _ in }
+
+    var width: CGFloat = 140
+    private let knob: CGFloat = 16
+    private let track: CGFloat = 4
+
+    @State private var editing = false
+
+    var body: some View {
+        let span = range.upperBound - range.lowerBound
+        let clamped = min(max(value, range.lowerBound), range.upperBound)
+        let fraction = span > 0 ? (clamped - range.lowerBound) / span : 0
+        let usable = width - knob
+
+        ZStack(alignment: .leading) {
+            Capsule().fill(Color.miroDivider).frame(height: track)
+            Capsule().fill(Color.miroBlue)
+                .frame(width: knob / 2 + fraction * usable, height: track)
+            Circle().fill(.white)
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
+                .frame(width: knob, height: knob)
+                .offset(x: fraction * usable)
+        }
+        .frame(width: width, height: knob)
+        .contentShape(.rect)
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { g in
+                    if !editing { editing = true; onEditingChanged(true) }
+                    let x = min(max(0, g.location.x - knob / 2), usable)
+                    let f = usable > 0 ? x / usable : 0
+                    value = range.lowerBound + f * span
+                }
+                .onEnded { _ in
+                    editing = false
+                    onEditingChanged(false)
+                }
+        )
     }
 }
 
