@@ -57,6 +57,18 @@ enum ExportService {
         }
     }
 
+    /// Warning alert with a destructive confirm button and Cancel.
+    /// Returns true when the user confirms.
+    static func confirmDiscard(message: String, info: String, confirmTitle: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.informativeText = info
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: confirmTitle)
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
     /// Pastes an image from the clipboard, asking for confirmation first when a
     /// document is already open. Returns true if a new image was loaded.
     @discardableResult
@@ -67,13 +79,11 @@ enum ExportService {
             return false
         }
         if controller.hasDocument {
-            let alert = NSAlert()
-            alert.messageText = "Replace the current image?"
-            alert.informativeText = "Pasting will replace the image you are editing. Unsaved annotations will be lost."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Replace")
-            alert.addButton(withTitle: "Cancel")
-            guard alert.runModal() == .alertFirstButtonReturn else { return false }
+            guard confirmDiscard(
+                message: "Replace the current image?",
+                info: "Pasting will replace the image you are editing. Unsaved annotations will be lost.",
+                confirmTitle: "Replace"
+            ) else { return false }
         }
         // End any in-progress inline text editing (fires textDidEndEditing →
         // commitTextEditing) so the editor doesn't linger over the new document.

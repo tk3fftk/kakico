@@ -117,7 +117,7 @@ private func paletteDivider(width: CGFloat, verticalPadding: CGFloat) -> some Vi
 // MARK: - Floating tool palette
 
 struct ToolPalette: View {
-    var controller: CanvasController
+    @Bindable var controller: CanvasController
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsStrokeWidth = false
@@ -184,8 +184,7 @@ struct ToolPalette: View {
                     Image(systemName: "lineweight")
                         .foregroundStyle(MiroTheme.textSecondary(scheme))
                     MiroSlider(
-                        value: Binding(get: { controller.strokeWidth },
-                                       set: { controller.strokeWidth = $0 }),
+                        value: $controller.strokeWidth,
                         range: 1...40,
                         onEditingChanged: { editing in
                             if editing { controller.beginInteraction() } else { controller.commitInteraction() }

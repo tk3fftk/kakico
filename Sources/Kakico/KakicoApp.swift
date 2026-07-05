@@ -38,13 +38,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard controller.hasDocument else { return .terminateNow }
-        let alert = NSAlert()
-        alert.messageText = "Quit Kakico?"
-        alert.informativeText = "Quitting will discard the image you are editing. Unsaved annotations will be lost."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Quit")
-        alert.addButton(withTitle: "Cancel")
-        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+        return ExportService.confirmDiscard(
+            message: "Quit Kakico?",
+            info: "Quitting will discard the image you are editing. Unsaved annotations will be lost.",
+            confirmTitle: "Quit"
+        ) ? .terminateNow : .terminateCancel
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
