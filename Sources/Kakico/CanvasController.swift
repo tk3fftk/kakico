@@ -101,7 +101,7 @@ final class CanvasController {
 
     // MARK: - Zoom
 
-    var zoomPercentText: String { "\(Int((effectiveZoomScale * 100).rounded()))%" }
+    var zoomPercentText: String { ZoomMath.percentLabel(for: effectiveZoomScale) }
 
     func setZoom(_ scale: CGFloat) { zoomMode = .percent(scale) }
     func zoomToFit() { zoomMode = .fit }

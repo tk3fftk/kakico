@@ -137,6 +137,28 @@ final class ZoomMathTests: XCTestCase {
         XCTAssertEqual(pan.dy, -7, accuracy: acc)
     }
 
+    // MARK: clampedScale
+
+    func testClampedScaleFloorsAtSmallestPreset() {
+        // Fit scale is 1.0, so the floor is the 25% preset.
+        let s = ZoomMath.clampedScale(0.05, canvas: CGSize(width: 100, height: 100),
+                                      viewport: CGSize(width: 100, height: 100))
+        XCTAssertEqual(s, 0.25, accuracy: acc)
+    }
+
+    func testClampedScaleFloorsAtFitForHugeImages() {
+        // 1000×1000 into 100×100 → fit 0.1, below the smallest preset.
+        let s = ZoomMath.clampedScale(0.01, canvas: CGSize(width: 1000, height: 1000),
+                                      viewport: CGSize(width: 100, height: 100))
+        XCTAssertEqual(s, 0.1, accuracy: acc)
+    }
+
+    func testClampedScaleCapsAtLargestPreset() {
+        let s = ZoomMath.clampedScale(9, canvas: CGSize(width: 100, height: 100),
+                                      viewport: CGSize(width: 100, height: 100))
+        XCTAssertEqual(s, 4.0, accuracy: acc)
+    }
+
     // MARK: zoom stepping
 
     func testZoomInFromFitFraction() {

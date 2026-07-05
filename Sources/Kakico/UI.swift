@@ -208,9 +208,8 @@ struct ToolPalette: View {
 private struct MiroSlider: View {
     @Binding var value: CGFloat
     let range: ClosedRange<CGFloat>
-    var onEditingChanged: (Bool) -> Void = { _ in }
-
-    var width: CGFloat = 140
+    let onEditingChanged: (Bool) -> Void
+    let width: CGFloat
     private let knob: CGFloat = 16
     private let track: CGFloat = 4
 
@@ -372,7 +371,7 @@ struct ZoomMenuButton: View {
     var body: some View {
         Menu {
             ForEach(ZoomMath.presets, id: \.self) { preset in
-                Button("\(Int(preset * 100))%") { controller.setZoom(preset) }
+                Button(ZoomMath.percentLabel(for: preset)) { controller.setZoom(preset) }
             }
             Divider()
             Button("Fit to Window") { controller.zoomToFit() }

@@ -79,6 +79,10 @@ final class CanvasNSView: NSView {
     private var flattenedVersion: Int = -1
     private var textEditor: NSTextView?
     private var editingTextID: ElementID?
+    /// `Renderer.suggestedSize` for the live editor string (the font is fixed
+    /// per editor session); pan re-anchors the frame every scroll tick without
+    /// re-running text layout. Cleared when the session ends.
+    private var editorSizeCache: (string: String, size: CGSize)?
     private var antsTimer: Timer?
     private var antsPhase: CGFloat = 0
 
@@ -201,16 +205,24 @@ final class CanvasNSView: NSView {
     /// Brings the stored pan state in line with the current zoom mode and
     /// bounds. Runs at the top of every draw — the one funnel that sees both
     /// zoom changes (via observation-triggered redraws) and window resizes.
-    private func reconcileZoom() {
-        guard let controller else { return }
+    /// Returns the reconciled mapping so draw needn't evaluate `displayInfo`
+    /// (a Document copy plus an O(n) canvas-rect scan) a second time.
+    private func reconcileZoom() -> DisplayInfo {
+        guard let controller else { return displayInfo }
         if case .fit = controller.zoomMode {
             panOffset = .zero
         }
-        let info = displayInfo
+        var info = displayInfo
         if let old = lastAppliedScale, old != info.scale {
             if case .percent = controller.zoomMode {
                 panOffset = ZoomMath.panPreservingCenter(oldPan: panOffset,
                                                          oldScale: old, newScale: info.scale)
+                // The rect above was built from the pre-adjustment pan; rebuild
+                // it (cheap arithmetic, the canvas rect is unchanged).
+                info = DisplayInfo(canvas: info.canvas, scale: info.scale,
+                                   rect: ZoomMath.imageRect(canvas: info.canvas.size,
+                                                            viewport: bounds.size,
+                                                            scale: info.scale, pan: panOffset))
             }
             // The inline editor's font has the old scale baked in; commit it,
             // matching what a mouseDown does. Deferred: draw must not mutate
@@ -219,9 +231,7 @@ final class CanvasNSView: NSView {
                 Task { @MainActor [weak self] in self?.commitTextEditing() }
             }
         }
-        let content = CGSize(width: info.canvas.width * info.scale,
-                             height: info.canvas.height * info.scale)
-        panOffset = ZoomMath.clampedPan(panOffset, content: content, viewport: bounds.size)
+        panOffset = ZoomMath.clampedPan(panOffset, content: info.rect.size, viewport: bounds.size)
         lastAppliedScale = info.scale
         if controller.effectiveZoomScale != info.scale {
             let scale = info.scale
@@ -229,10 +239,11 @@ final class CanvasNSView: NSView {
                 controller?.reportEffectiveZoomScale(scale)
             }
         }
+        return info
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        reconcileZoom()
+        let reconciled = reconcileZoom()
         guard let ctx = NSGraphicsContext.current?.cgContext,
               let controller, let doc = controller.document else { return }
         let exportBounds = controller.exportBounds
@@ -253,7 +264,7 @@ final class CanvasNSView: NSView {
             }
             flattenedVersion = version
         }
-        let info = dragDisplayInfo ?? displayInfo
+        let info = dragDisplayInfo ?? reconciled
         // Model rect the cached image covers (`flattenedKey` is the document it
         // was rendered from), mapped through `info`: with a frozen transform,
         // grown content draws outside the fitted rect instead of being squeezed
@@ -536,8 +547,7 @@ final class CanvasNSView: NSView {
             return
         }
         let info = displayInfo
-        let content = CGSize(width: info.canvas.width * info.scale,
-                             height: info.canvas.height * info.scale)
+        let content = info.rect.size
         guard content.width > bounds.width || content.height > bounds.height else {
             super.scrollWheel(with: event)  // fits entirely: stay centered
             return
@@ -560,24 +570,23 @@ final class CanvasNSView: NSView {
         }
         let info = displayInfo
         let oldScale = info.scale
-        // Floor below the smallest preset when the fitted scale is smaller, so
-        // huge images can still pinch back out to (roughly) fit.
-        let minScale = min(ZoomMath.presets.first!,
-                           ZoomMath.fittedScale(canvas: info.canvas.size, viewport: bounds.size))
-        let newScale = min(max(oldScale * (1 + event.magnification), minScale), ZoomMath.presets.last!)
-        guard oldScale > 0, newScale != oldScale else { return }
+        let newScale = ZoomMath.clampedScale(oldScale * (1 + event.magnification),
+                                             canvas: info.canvas.size, viewport: bounds.size)
+        guard newScale != oldScale else { return }
         if textEditor != nil { commitTextEditing() }  // editor font has the old scale baked in
         let anchor = convert(event.locationInWindow, from: nil)
         let pan = ZoomMath.panPreservingPoint(anchor, oldPan: panOffset,
                                               oldScale: oldScale, newScale: newScale,
                                               canvas: info.canvas.size, viewport: bounds.size)
-        let content = CGSize(width: info.canvas.width * newScale,
-                             height: info.canvas.height * newScale)
+        let content = ZoomMath.contentSize(canvas: info.canvas.size, scale: newScale)
         panOffset = ZoomMath.clampedPan(pan, content: content, viewport: bounds.size)
         // Pan is already anchored; without this, reconcileZoom() would see the
         // scale change and re-anchor at the view center.
         lastAppliedScale = newScale
-        controller.zoomMode = .percent(newScale)
+        controller.setZoom(newScale)
+        // Report synchronously; otherwise every pinch frame's reconcileZoom()
+        // spawns a Task just to write this one value back.
+        controller.reportEffectiveZoomScale(newScale)
         needsDisplay = true
     }
 
@@ -646,7 +655,13 @@ final class CanvasNSView: NSView {
               let element = controller?.document?.elements.first(where: { $0.id == id }),
               case .text(var t) = element else { return }
         t.string = tv.string
-        let size = Renderer.suggestedSize(for: t)
+        let size: CGSize
+        if let cache = editorSizeCache, cache.string == t.string {
+            size = cache.size
+        } else {
+            size = Renderer.suggestedSize(for: t)
+            editorSizeCache = (t.string, size)
+        }
         let newFrame = textEditorFrame(forModelRect: CGRect(origin: t.origin, size: size))
         if tv.frame != newFrame { tv.frame = newFrame }
     }
@@ -657,6 +672,7 @@ final class CanvasNSView: NSView {
         tv.removeFromSuperview()
         textEditor = nil
         editingTextID = nil
+        editorSizeCache = nil
         controller.isEditingText = false
 
         if newString.isEmpty {

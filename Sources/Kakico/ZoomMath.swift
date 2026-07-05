@@ -13,10 +13,28 @@ enum ZoomMode: Equatable {
 enum ZoomMath {
     static let presets: [CGFloat] = [0.25, 0.5, 1.0, 2.0, 4.0]
 
+    /// Shared formatter for zoom UI labels (live percentage and menu presets).
+    static func percentLabel(for scale: CGFloat) -> String {
+        "\(Int((scale * 100).rounded()))%"
+    }
+
     /// Largest scale at which `canvas` fits entirely inside `viewport`.
     static func fittedScale(canvas: CGSize, viewport: CGSize) -> CGFloat {
         guard canvas.width > 0, canvas.height > 0 else { return 1 }
         return min(viewport.width / canvas.width, viewport.height / canvas.height)
+    }
+
+    /// Size of the scaled canvas in view points.
+    static func contentSize(canvas: CGSize, scale: CGFloat) -> CGSize {
+        CGSize(width: canvas.width * scale, height: canvas.height * scale)
+    }
+
+    /// Clamps a continuous (pinch) scale to the allowed zoom range. The floor
+    /// drops below the smallest preset when the fitted scale is smaller, so
+    /// huge images can still zoom back out to (roughly) fit.
+    static func clampedScale(_ scale: CGFloat, canvas: CGSize, viewport: CGSize) -> CGFloat {
+        let floor = min(presets.first!, fittedScale(canvas: canvas, viewport: viewport))
+        return min(max(scale, floor), presets.last!)
     }
 
     /// Per axis: content that fits stays centered (offset 0); content that
@@ -34,7 +52,7 @@ enum ZoomMath {
     /// View-space rect for the scaled canvas: centered in the viewport, then
     /// displaced by the (clamped) pan offset.
     static func imageRect(canvas: CGSize, viewport: CGSize, scale: CGFloat, pan: CGVector) -> CGRect {
-        let content = CGSize(width: canvas.width * scale, height: canvas.height * scale)
+        let content = contentSize(canvas: canvas, scale: scale)
         let pan = clampedPan(pan, content: content, viewport: viewport)
         return CGRect(x: (viewport.width - content.width) / 2 + pan.dx,
                       y: (viewport.height - content.height) / 2 + pan.dy,
