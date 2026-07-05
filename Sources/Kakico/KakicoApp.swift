@@ -207,7 +207,7 @@ struct AppCommands: Commands {
         CommandGroup(after: .sidebar) {
             Divider()
             Button("Zoom In") { controller.zoomIn() }
-                .keyboardShortcut("=", modifiers: .command)
+                .keyboardShortcut("+", modifiers: .command)
                 .disabled(!controller.hasDocument)
             Button("Zoom Out") { controller.zoomOut() }
                 .keyboardShortcut("-", modifiers: .command)
