@@ -99,12 +99,7 @@ struct ToastView: View {
                 .foregroundStyle(MiroTheme.textPrimary(scheme))
         }
         .padding(.vertical, 10).padding(.horizontal, 16)
-        .background(
-            Capsule()
-                .fill(.regularMaterial)
-                .shadow(color: .black.opacity(0.22), radius: 16, y: 14)
-        )
-        .overlay(Capsule().strokeBorder(Color.miroDivider.opacity(0.5), lineWidth: 1))
+        .miroFloatingPanel(shape: Capsule())
         .allowsHitTesting(false)
     }
 }
@@ -337,7 +332,6 @@ private struct ColorPresetPanel: View {
 struct ActionBar: View {
     var controller: CanvasController
     @Environment(\.colorScheme) private var scheme
-    @State private var copied = false
 
     var body: some View {
         HStack(spacing: 4) {
@@ -345,15 +339,10 @@ struct ActionBar: View {
                 .frame(width: 32, height: 32)
                 .help("Drag out to share as PNG")
 
-            actionTile(copied ? "checkmark" : "doc.on.clipboard",
-                       help: "Copy image to clipboard",
-                       tint: copied ? .miroSuccess : nil) {
+            // Copy confirmation comes from the shared toast that
+            // copyToClipboard flashes (it also covers ⌘C, which has no button).
+            actionTile("doc.on.clipboard", help: "Copy image to clipboard") {
                 ExportService.copyToClipboard(controller)
-                copied = true
-                Task {
-                    try? await Task.sleep(for: .seconds(1))
-                    copied = false
-                }
             }
             actionTile("square.and.arrow.down", help: "Export image") {
                 ExportService.exportPanel(controller)
@@ -362,10 +351,10 @@ struct ActionBar: View {
         .miroFloatingPanel()
     }
 
-    private func actionTile(_ symbol: String, help: String, tint: Color? = nil,
+    private func actionTile(_ symbol: String, help: String,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            tileIcon(symbol, tint: tint ?? MiroTheme.textSecondary(scheme), iconSize: 16, tile: 36)
+            tileIcon(symbol, tint: MiroTheme.textSecondary(scheme), iconSize: 16, tile: 36)
         }
         .buttonStyle(MiroTileButtonStyle())
         .help(help)

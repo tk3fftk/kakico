@@ -179,22 +179,31 @@ struct MiroTileButtonStyle: ButtonStyle {
 
 // MARK: - Floating panel chrome (DESIGN.md §3 toolbar, §7 dark elevation)
 
-private struct MiroFloatingPanel: ViewModifier {
+private struct MiroFloatingPanel<PanelShape: InsettableShape>: ViewModifier {
+    let shape: PanelShape
+
     func body(content: Content) -> some View {
         content
-            .padding(8)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                shape
                     .fill(.regularMaterial)
                     .shadow(color: .black.opacity(0.22), radius: 16, y: 14)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                shape
                     .strokeBorder(Color.miroDivider.opacity(0.5), lineWidth: 1)
             )
     }
 }
 
 extension View {
-    func miroFloatingPanel() -> some View { modifier(MiroFloatingPanel()) }
+    func miroFloatingPanel() -> some View {
+        padding(8).modifier(MiroFloatingPanel(shape: RoundedRectangle(cornerRadius: 16)))
+    }
+
+    /// The same elevation chrome on a custom shape; the caller supplies its
+    /// own content padding.
+    func miroFloatingPanel(shape: some InsettableShape) -> some View {
+        modifier(MiroFloatingPanel(shape: shape))
+    }
 }

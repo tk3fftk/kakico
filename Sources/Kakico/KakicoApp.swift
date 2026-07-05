@@ -46,34 +46,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) ? .terminateNow : .terminateCancel
     }
 
+    /// Local monitor for a plain-⌘ letter shortcut. Field editors and the
+    /// inline text annotation editor are NSTextViews; the event passes through
+    /// while one is focused so they keep handling the key themselves. `action`
+    /// returns true to consume the event, false to pass it through.
+    private func commandKeyMonitor(for character: String,
+                                   action: @escaping @MainActor () -> Bool) -> Any? {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
+                  event.charactersIgnoringModifiers?.lowercased() == character,
+                  !(NSApp.keyWindow?.firstResponder is NSTextView) else { return event }
+            return action() ? nil : event
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // SwiftUI's bridged Edit ▸ Paste item swallows ⌘V without dispatching
         // paste: down the AppKit responder chain, so intercept the key event
         // before menu dispatch instead.
-        pasteKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self,
-                  event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
-                  event.charactersIgnoringModifiers?.lowercased() == "v" else { return event }
-            // Field editors and the inline text annotation editor are
-            // NSTextViews; let them handle ⌘V (text paste) themselves.
-            if NSApp.keyWindow?.firstResponder is NSTextView { return event }
-            let controller = self.controller
+        pasteKeyMonitor = commandKeyMonitor(for: "v") { [controller] in
             DispatchQueue.main.async { ExportService.confirmAndPasteImage(controller) }
-            return nil
+            return true
         }
 
-        // Plain ⌘C copies the flattened image when nothing is selected. The
-        // event passes through untouched while a text editor is active or an
-        // annotation is selected, so text copy and future element copy keep
-        // working.
-        copyKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self,
-                  event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
-                  event.charactersIgnoringModifiers?.lowercased() == "c" else { return event }
-            if NSApp.keyWindow?.firstResponder is NSTextView { return event }
-            guard self.controller.hasDocument, self.controller.selection == nil else { return event }
-            ExportService.copyToClipboard(self.controller)
-            return nil
+        // Plain ⌘C copies the flattened image when nothing is selected; it
+        // passes through while an annotation is selected, so future element
+        // copy keeps working.
+        copyKeyMonitor = commandKeyMonitor(for: "c") { [controller] in
+            guard controller.hasDocument, controller.selection == nil else { return false }
+            ExportService.copyToClipboard(controller)
+            return true
         }
 
         // Legacy digit shortcuts (0-7, the Tool.allCases order) kept alongside
