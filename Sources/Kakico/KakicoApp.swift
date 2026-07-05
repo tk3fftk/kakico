@@ -202,6 +202,20 @@ struct AppCommands: Commands {
                 .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!controller.canRedo)
         }
+        // Lands in the system View menu. ⌘0 doesn't collide with the legacy
+        // digit tool shortcuts — AppDelegate's key monitor skips ⌘-modified keys.
+        CommandGroup(after: .sidebar) {
+            Divider()
+            Button("Zoom In") { controller.zoomIn() }
+                .keyboardShortcut("=", modifiers: .command)
+                .disabled(!controller.hasDocument)
+            Button("Zoom Out") { controller.zoomOut() }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(!controller.hasDocument)
+            Button("Fit to Window") { controller.zoomToFit() }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(!controller.hasDocument)
+        }
         CommandMenu("Tools") {
             // Unmodified letter equivalents would steal typing from the inline
             // text editor, so disable them while it is active. The legacy 0-7

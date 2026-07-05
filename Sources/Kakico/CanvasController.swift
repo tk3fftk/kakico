@@ -43,6 +43,12 @@ final class CanvasController {
     }
     private(set) var sourceURL: URL?
 
+    /// Transient view state — deliberately outside the undo stack.
+    var zoomMode: ZoomMode = .fit
+    /// Scale the canvas actually drew with last (fit mode included); written
+    /// back by CanvasNSView so the zoom button can show a live percentage.
+    private(set) var effectiveZoomScale: CGFloat = 1
+
     /// Undo unit: the document plus the base image (destructive crop swaps the
     /// image, so document snapshots alone can't restore it).
     private struct State {
@@ -90,6 +96,21 @@ final class CanvasController {
         pendingCommitTask?.cancel()
         pendingCommitTask = nil
         interactionSnapshot = nil
+        zoomMode = .fit
+    }
+
+    // MARK: - Zoom
+
+    var zoomPercentText: String { "\(Int((effectiveZoomScale * 100).rounded()))%" }
+
+    func setZoom(_ scale: CGFloat) { zoomMode = .percent(scale) }
+    func zoomToFit() { zoomMode = .fit }
+    func zoomIn() { zoomMode = .percent(ZoomMath.zoomInScale(from: effectiveZoomScale)) }
+    func zoomOut() { zoomMode = .percent(ZoomMath.zoomOutScale(from: effectiveZoomScale)) }
+
+    func reportEffectiveZoomScale(_ scale: CGFloat) {
+        guard scale != effectiveZoomScale else { return }
+        effectiveZoomScale = scale
     }
 
     /// Loads an image from the general pasteboard, if present.

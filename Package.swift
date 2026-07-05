@@ -16,6 +16,7 @@ let package = Package(
             name: "Kakico",
             dependencies: ["AnnotationModel", "AnnotationRender"]
         ),
+        .testTarget(name: "KakicoTests", dependencies: ["Kakico"]),
         .testTarget(name: "AnnotationModelTests", dependencies: ["AnnotationModel"]),
         .testTarget(name: "AnnotationRenderTests", dependencies: ["AnnotationModel", "AnnotationRender"]),
     ]

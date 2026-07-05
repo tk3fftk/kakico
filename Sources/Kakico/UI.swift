@@ -64,8 +64,11 @@ struct ContentView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if let doc = controller.document {
-                ImageSizeBadge(document: doc, exportBounds: controller.exportBounds)
-                    .padding(16)
+                HStack(spacing: 8) {
+                    ZoomMenuButton(controller: controller)
+                    ImageSizeBadge(document: doc, exportBounds: controller.exportBounds)
+                }
+                .padding(16)
             }
         }
         .animation(.easeOut(duration: 0.12), value: controller.document?.crop != nil)
@@ -357,6 +360,36 @@ struct CropActionBar: View {
         }
         .miroFloatingPanel()
         .transition(.opacity)
+    }
+}
+
+/// Preview-style zoom control next to the size badge: shows the live effective
+/// percentage (fit mode included) and pulls down the preset levels.
+struct ZoomMenuButton: View {
+    var controller: CanvasController
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Menu {
+            ForEach(ZoomMath.presets, id: \.self) { preset in
+                Button("\(Int(preset * 100))%") { controller.setZoom(preset) }
+            }
+            Divider()
+            Button("Fit to Window") { controller.zoomToFit() }
+        } label: {
+            HStack(spacing: 3) {
+                Text(controller.zoomPercentText)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .font(.miroCaption)
+            .foregroundStyle(MiroTheme.textSecondary(scheme))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .miroFloatingPanel()
+        .help("Zoom")
     }
 }
 
