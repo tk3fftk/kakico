@@ -550,6 +550,37 @@ final class CanvasNSView: NSView {
         needsDisplay = true
     }
 
+    /// Pinch zoom, anchored at the cursor. Continuous scale — the label shows
+    /// the live percentage and ⌘+/⌘- step to presets from wherever this lands.
+    override func magnify(with event: NSEvent) {
+        guard let controller, controller.hasDocument,
+              case .none = drag else {  // never zoom mid-annotation-drag
+            super.magnify(with: event)
+            return
+        }
+        let info = displayInfo
+        let oldScale = info.scale
+        // Floor below the smallest preset when the fitted scale is smaller, so
+        // huge images can still pinch back out to (roughly) fit.
+        let minScale = min(ZoomMath.presets.first!,
+                           ZoomMath.fittedScale(canvas: info.canvas.size, viewport: bounds.size))
+        let newScale = min(max(oldScale * (1 + event.magnification), minScale), ZoomMath.presets.last!)
+        guard oldScale > 0, newScale != oldScale else { return }
+        if textEditor != nil { commitTextEditing() }  // editor font has the old scale baked in
+        let anchor = convert(event.locationInWindow, from: nil)
+        let pan = ZoomMath.panPreservingPoint(anchor, oldPan: panOffset,
+                                              oldScale: oldScale, newScale: newScale,
+                                              canvas: info.canvas.size, viewport: bounds.size)
+        let content = CGSize(width: info.canvas.width * newScale,
+                             height: info.canvas.height * newScale)
+        panOffset = ZoomMath.clampedPan(pan, content: content, viewport: bounds.size)
+        // Pan is already anchored; without this, reconcileZoom() would see the
+        // scale change and re-anchor at the view center.
+        lastAppliedScale = newScale
+        controller.zoomMode = .percent(newScale)
+        needsDisplay = true
+    }
+
     // MARK: Keyboard
 
     override func keyDown(with event: NSEvent) {

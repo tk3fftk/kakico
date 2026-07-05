@@ -94,6 +94,49 @@ final class ZoomMathTests: XCTestCase {
         XCTAssertEqual(newRect.minY + modelY * newScale, center.y, accuracy: acc)
     }
 
+    // MARK: panPreservingPoint
+
+    func testPanPreservingPointKeepsAnchorModelPointFixed() {
+        let canvas = CGSize(width: 120, height: 80)
+        let viewport = CGSize(width: 100, height: 100)
+        let oldScale: CGFloat = 2, newScale: CGFloat = 3.5
+        let oldPan = CGVector(dx: -15, dy: 25)
+        let anchor = CGPoint(x: 70, y: 20)
+        let oldRect = ZoomMath.imageRect(canvas: canvas, viewport: viewport, scale: oldScale, pan: oldPan)
+        // Model point under the anchor before the zoom.
+        let modelX = (anchor.x - oldRect.minX) / oldScale
+        let modelY = (anchor.y - oldRect.minY) / oldScale
+
+        let newPan = ZoomMath.panPreservingPoint(anchor, oldPan: oldPan,
+                                                 oldScale: oldScale, newScale: newScale,
+                                                 canvas: canvas, viewport: viewport)
+        let newRect = ZoomMath.imageRect(canvas: canvas, viewport: viewport, scale: newScale, pan: newPan)
+        XCTAssertEqual(newRect.minX + modelX * newScale, anchor.x, accuracy: acc)
+        XCTAssertEqual(newRect.minY + modelY * newScale, anchor.y, accuracy: acc)
+    }
+
+    func testPanPreservingPointAtViewportCenterMatchesPanPreservingCenter() {
+        let canvas = CGSize(width: 200, height: 150)
+        let viewport = CGSize(width: 100, height: 100)
+        let oldScale: CGFloat = 1.5, newScale: CGFloat = 0.75
+        let oldPan = CGVector(dx: 12, dy: -8)
+        let atCenter = ZoomMath.panPreservingPoint(CGPoint(x: 50, y: 50), oldPan: oldPan,
+                                                   oldScale: oldScale, newScale: newScale,
+                                                   canvas: canvas, viewport: viewport)
+        let center = ZoomMath.panPreservingCenter(oldPan: oldPan, oldScale: oldScale, newScale: newScale)
+        XCTAssertEqual(atCenter.dx, center.dx, accuracy: acc)
+        XCTAssertEqual(atCenter.dy, center.dy, accuracy: acc)
+    }
+
+    func testPanPreservingPointIdentityWhenScaleUnchanged() {
+        let pan = ZoomMath.panPreservingPoint(CGPoint(x: 10, y: 90), oldPan: CGVector(dx: 5, dy: -7),
+                                              oldScale: 2, newScale: 2,
+                                              canvas: CGSize(width: 100, height: 100),
+                                              viewport: CGSize(width: 100, height: 100))
+        XCTAssertEqual(pan.dx, 5, accuracy: acc)
+        XCTAssertEqual(pan.dy, -7, accuracy: acc)
+    }
+
     // MARK: zoom stepping
 
     func testZoomInFromFitFraction() {

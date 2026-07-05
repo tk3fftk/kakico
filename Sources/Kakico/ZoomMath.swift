@@ -49,6 +49,23 @@ enum ZoomMath {
         return CGVector(dx: oldPan.dx * f, dy: oldPan.dy * f)
     }
 
+    /// Keeps the model point under `viewPoint` fixed across a scale change
+    /// (pinch zoom anchored at the cursor). With `viewPoint` at the viewport
+    /// center this reduces to `panPreservingCenter`.
+    static func panPreservingPoint(_ viewPoint: CGPoint, oldPan: CGVector,
+                                   oldScale: CGFloat, newScale: CGFloat,
+                                   canvas: CGSize, viewport: CGSize) -> CGVector {
+        guard oldScale > 0 else { return oldPan }
+        let f = newScale / oldScale
+        func solve(_ v: CGFloat, pan: CGFloat, canvas: CGFloat, viewport: CGFloat) -> CGFloat {
+            let rectMin = (viewport - canvas * oldScale) / 2 + pan
+            let newRectMin = v - (v - rectMin) * f
+            return newRectMin - (viewport - canvas * newScale) / 2
+        }
+        return CGVector(dx: solve(viewPoint.x, pan: oldPan.dx, canvas: canvas.width, viewport: viewport.width),
+                        dy: solve(viewPoint.y, pan: oldPan.dy, canvas: canvas.height, viewport: viewport.height))
+    }
+
     /// First preset above `current`; the epsilon keeps an exact preset from
     /// matching itself. Clamps at the largest preset.
     static func zoomInScale(from current: CGFloat) -> CGFloat {
