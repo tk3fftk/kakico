@@ -31,8 +31,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pasteKeyMonitor: Any?
     private var toolKeyMonitor: Any?
     private var editMenuDelegate: EditMenuFilter?
+    private var windowDelegateProxy: TerminationRoutingWindowDelegate?
+    private var windowHookObserver: NSObjectProtocol?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard controller.hasDocument else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "Quit Kakico?"
+        alert.informativeText = "Quitting will discard the image you are editing. Unsaved annotations will be lost."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // SwiftUI's bridged Edit ▸ Paste item swallows ⌘V without dispatching
@@ -70,6 +83,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 editMenu.delegate = self.editMenuDelegate
             }
         }
+
+        // SwiftUI creates the main window (and installs its own delegate)
+        // after didFinishLaunching, so wrap that delegate once the window
+        // first becomes main.
+        windowHookObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let window = note.object as? NSWindow
+            MainActor.assumeIsolated {
+                guard let self, self.windowDelegateProxy == nil, let window else { return }
+                let proxy = TerminationRoutingWindowDelegate(wrapping: window.delegate)
+                self.windowDelegateProxy = proxy
+                window.delegate = proxy
+                if let observer = self.windowHookObserver {
+                    NotificationCenter.default.removeObserver(observer)
+                    self.windowHookObserver = nil
+                }
+            }
+        }
+    }
+}
+
+/// Wraps SwiftUI's window delegate so every close path (red button, ⌘W,
+/// File ▸ Close) routes through applicationShouldTerminate, letting the quit
+/// confirmation cancel before the window disappears. All other delegate
+/// callbacks are forwarded to SwiftUI's original delegate untouched.
+private final class TerminationRoutingWindowDelegate: NSObject, NSWindowDelegate {
+    // Strong on purpose: NSWindow.delegate is weak, so once this proxy takes
+    // that slot it may be the only owner of SwiftUI's delegate.
+    private let wrapped: NSWindowDelegate?
+
+    init(wrapping wrapped: NSWindowDelegate?) {
+        self.wrapped = wrapped
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Defer so the confirmation alert runs outside performClose:'s stack.
+        DispatchQueue.main.async { NSApp.terminate(nil) }
+        return false
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        super.responds(to: aSelector) || (wrapped?.responds(to: aSelector) ?? false)
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        if wrapped?.responds(to: aSelector) == true { return wrapped }
+        return super.forwardingTarget(for: aSelector)
     }
 }
 
