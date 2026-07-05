@@ -29,6 +29,7 @@ struct KakicoApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = CanvasController()
     private var pasteKeyMonitor: Any?
+    private var copyKeyMonitor: Any?
     private var toolKeyMonitor: Any?
     private var editMenuDelegate: EditMenuFilter?
     private var windowDelegateProxy: TerminationRoutingWindowDelegate?
@@ -58,6 +59,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if NSApp.keyWindow?.firstResponder is NSTextView { return event }
             let controller = self.controller
             DispatchQueue.main.async { ExportService.confirmAndPasteImage(controller) }
+            return nil
+        }
+
+        // Plain ⌘C copies the flattened image when nothing is selected. The
+        // event passes through untouched while a text editor is active or an
+        // annotation is selected, so text copy and future element copy keep
+        // working.
+        copyKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self,
+                  event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
+                  event.charactersIgnoringModifiers?.lowercased() == "c" else { return event }
+            if NSApp.keyWindow?.firstResponder is NSTextView { return event }
+            guard self.controller.hasDocument, self.controller.selection == nil else { return event }
+            ExportService.copyToClipboard(self.controller)
             return nil
         }
 

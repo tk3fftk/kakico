@@ -23,12 +23,22 @@ enum ExportService {
 
     static func copyToClipboard(_ controller: CanvasController) {
         guard let cg = flatten(controller) else { NSSound.beep(); return }
+        // Write concrete PNG + TIFF bytes instead of an NSImage promise:
+        // promised data can resolve late (or not at all for clipboard
+        // managers), and PNG-only consumers never see NSImage's TIFF-first
+        // offering. Toast only after both writes actually succeed.
         let rep = NSBitmapImageRep(cgImage: cg)
-        let image = NSImage(size: NSSize(width: cg.width, height: cg.height))
-        image.addRepresentation(rep)
+        guard let png = rep.representation(using: .png, properties: [:]),
+              let tiff = rep.tiffRepresentation else {
+            NSSound.beep(); return
+        }
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.writeObjects([image])
+        pb.declareTypes([.png, .tiff], owner: nil)
+        guard pb.setData(png, forType: .png), pb.setData(tiff, forType: .tiff) else {
+            NSSound.beep(); return
+        }
+        controller.flashToast("Copied to clipboard")
     }
 
     static func exportPanel(_ controller: CanvasController) {

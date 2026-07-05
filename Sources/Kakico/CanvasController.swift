@@ -49,6 +49,22 @@ final class CanvasController {
     /// back by CanvasNSView so the zoom button can show a live percentage.
     private(set) var effectiveZoomScale: CGFloat = 1
 
+    /// Transient toast text shown by ContentView; auto-cleared by flashToast.
+    private(set) var toastMessage: String?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
+
+    /// Shows `message` in the bottom-center toast, restarting the dismiss
+    /// timer if a toast is already visible.
+    func flashToast(_ message: String) {
+        toastTask?.cancel()
+        toastMessage = message
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(1.8))
+            guard !Task.isCancelled else { return }
+            toastMessage = nil
+        }
+    }
+
     /// Undo unit: the document plus the base image (destructive crop swaps the
     /// image, so document snapshots alone can't restore it).
     private struct State {

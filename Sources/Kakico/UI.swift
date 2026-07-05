@@ -22,6 +22,7 @@ func rgbaColor(from color: Color) -> RGBAColor {
 struct ContentView: View {
     var controller: CanvasController
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         // swiftlint:disable:next redundant_discardable_let
@@ -71,7 +72,40 @@ struct ContentView: View {
                 .padding(16)
             }
         }
+        .overlay(alignment: .bottom) {
+            if let message = controller.toastMessage {
+                ToastView(message: message)
+                    .padding(.bottom, 24)
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
+            }
+        }
         .animation(.easeOut(duration: 0.12), value: controller.document?.crop != nil)
+        .animation(.easeOut(duration: 0.18), value: controller.toastMessage)
+    }
+}
+
+/// Bottom-center confirmation toast; purely informational, so it never
+/// intercepts clicks meant for the canvas below.
+struct ToastView: View {
+    let message: String
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Color.miroSuccess)
+            Text(message)
+                .font(.miroControl)
+                .foregroundStyle(MiroTheme.textPrimary(scheme))
+        }
+        .padding(.vertical, 10).padding(.horizontal, 16)
+        .background(
+            Capsule()
+                .fill(.regularMaterial)
+                .shadow(color: .black.opacity(0.22), radius: 16, y: 14)
+        )
+        .overlay(Capsule().strokeBorder(Color.miroDivider.opacity(0.5), lineWidth: 1))
+        .allowsHitTesting(false)
     }
 }
 
