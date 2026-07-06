@@ -615,15 +615,38 @@ final class CanvasNSView: NSView {
         }
     }
 
-    // MARK: Inline text editing
+    // MARK: Drag & drop import
 
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pb = sender.draggingPasteboard
+        if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingContentsConformToTypes: ["public.image"]]) as? [URL],
+           let url = urls.first {
+            controller?.loadImage(at: url)
+            refresh()
+            return true
+        }
+        if let objs = pb.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+           let img = objs.first?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            controller?.loadImage(img)
+            refresh()
+            return true
+        }
+        return false
+    }
+}
+
+// MARK: - Inline text editing
+
+extension CanvasNSView: NSTextViewDelegate {
     /// Editor frame for a text element's model rect; the -2 inset leaves room
     /// for the editor chrome around the rendered text.
     private func textEditorFrame(forModelRect rect: CGRect) -> NSRect {
         displayInfo.viewRect(forModelRect: rect).insetBy(dx: -2, dy: -2)
     }
 
-    private func beginTextEditing(for id: ElementID) {
+    fileprivate func beginTextEditing(for id: ElementID) {
         guard let controller,
               let element = controller.document?.elements.first(where: { $0.id == id }),
               case .text(let text) = element else { return }
@@ -648,7 +671,7 @@ final class CanvasNSView: NSView {
     /// Re-anchors the inline editor after the display mapping moved under it
     /// (pan). Sizes from the live editor string, like textDidChange, so a
     /// mid-typing pan doesn't snap the frame back to the committed text.
-    private func syncTextEditorFrame() {
+    fileprivate func syncTextEditorFrame() {
         guard let tv = textEditor, let id = editingTextID,
               let element = controller?.document?.elements.first(where: { $0.id == id }),
               case .text(var t) = element else { return }
@@ -683,29 +706,6 @@ final class CanvasNSView: NSView {
         refresh()
     }
 
-    // MARK: Drag & drop import
-
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
-
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let pb = sender.draggingPasteboard
-        if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingContentsConformToTypes: ["public.image"]]) as? [URL],
-           let url = urls.first {
-            controller?.loadImage(at: url)
-            refresh()
-            return true
-        }
-        if let objs = pb.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-           let img = objs.first?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            controller?.loadImage(img)
-            refresh()
-            return true
-        }
-        return false
-    }
-}
-
-extension CanvasNSView: NSTextViewDelegate {
     func textDidEndEditing(_ notification: Notification) {
         commitTextEditing()
     }

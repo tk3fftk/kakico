@@ -67,9 +67,11 @@ enum ZoomMath {
         return CGVector(dx: oldPan.dx * f, dy: oldPan.dy * f)
     }
 
+    // swiftlint:disable function_parameter_count
     /// Keeps the model point under `viewPoint` fixed across a scale change
     /// (pinch zoom anchored at the cursor). With `viewPoint` at the viewport
-    /// center this reduces to `panPreservingCenter`.
+    /// center this reduces to `panPreservingCenter`. Pure geometry — all six
+    /// parameters are independent coordinates of one mapping.
     static func panPreservingPoint(_ viewPoint: CGPoint, oldPan: CGVector,
                                    oldScale: CGFloat, newScale: CGFloat,
                                    canvas: CGSize, viewport: CGSize) -> CGVector {
@@ -83,6 +85,7 @@ enum ZoomMath {
         return CGVector(dx: solve(viewPoint.x, pan: oldPan.dx, canvas: canvas.width, viewport: viewport.width),
                         dy: solve(viewPoint.y, pan: oldPan.dy, canvas: canvas.height, viewport: viewport.height))
     }
+    // swiftlint:enable function_parameter_count
 
     /// First preset above `current`; the epsilon keeps an exact preset from
     /// matching itself. Clamps at the largest preset.
