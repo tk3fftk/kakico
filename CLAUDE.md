@@ -43,8 +43,8 @@ Senior macOS Engineer, specializing in SwiftUI and AppKit.
 
 - `Sources/AnnotationModel/` — pure value-type model (no AppKit/SwiftUI imports).
 - `Sources/AnnotationRender/` — CoreGraphics rendering of `Document` into `CGImage`.
-- `Sources/Kakico/` — SwiftUI app: `KakicoApp.swift`, `CanvasController.swift` (the `@Observable` state root), `CanvasView.swift` (AppKit bridge), `UI.swift` (all other views), `ExportService.swift`.
-- `Tests/` — unit tests for AnnotationModel and AnnotationRender.
+- `Sources/Kakico/` — SwiftUI app: `KakicoApp.swift`, `CanvasController.swift` (the `@Observable` state root), `CanvasView.swift` (AppKit bridge), `UI.swift` (all other views), `Theme.swift` (Miro-style tokens and shared chrome), `ZoomMath.swift` (pure zoom/pan geometry), `ExportService.swift`.
+- `Tests/` — unit tests for AnnotationModel, AnnotationRender, and Kakico (ZoomMath).
 
 ### PR instructions
 

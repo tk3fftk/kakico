@@ -1,6 +1,6 @@
 # Miro (macOS) — SwiftUI Implementation Guide
 
-> **Note:** This document is a reference catalog of Miro's design language, not a spec of what Kakico implements. `Sources/Kakico/Theme.swift` is the source of truth for implemented tokens. Fonts are intentionally mapped to system fonts (Inter/Caveat/JetBrains Mono are not bundled). Several components described here — `MiroStickyNote`, `MiroZoomPill`, `MiroHomeSidebar`, multiplayer cursors, and the pan/zoom canvas — are unimplemented references.
+> **Note:** This document is a reference catalog of Miro's design language, not a spec of what Kakico implements. `Sources/Kakico/Theme.swift` is the source of truth for implemented tokens. Fonts are intentionally mapped to system fonts (Inter/Caveat/JetBrains Mono are not bundled). Several components described here — `MiroStickyNote`, `MiroZoomPill`, `MiroHomeSidebar`, multiplayer cursors, and the infinite pan/zoom board canvas — are unimplemented references. (Kakico does zoom/pan the *image* itself — `ZoomMath.swift` + the `ZoomMenuButton` in `UI.swift` — but the board grid stays fixed and the zoom control is a percent menu, not this Zoom Pill.)
 
 ## 1. Color Tokens
 

@@ -184,12 +184,14 @@ was launched natively (proc_translated = 0) and exercised end-to-end.
   animated `CAShapeLayer`. Performance is fine at current scope.
 - **`.kakico` is a single JSON file** (base image embedded as PNG `Data`), not a
   `document.json` + `base.png` package directory.
-- **Paste Image is ⇧⌘V**, not ⌘V — plain ⌘V must stay free for Edit ▸ Paste so the
-  inline `NSTextView` text editor works.
+- **Paste Image works on plain ⌘V** via an AppDelegate key monitor that passes the
+  event through while an `NSTextView` (field editor or inline text editor) is focused;
+  ⇧⌘V remains as the visible File-menu alias. (SwiftUI's bridged Edit ▸ Paste swallows
+  ⌘V without dispatching `paste:` down the responder chain, hence the monitor.)
 - **Undo snapshots carry (Document, baseImage) pairs**, not just the document —
   applying a crop destructively swaps the base image, and undo must restore it.
-- **Zoom/offset transform:** the canvas aspect-fits the image (one computed
-  scale/offset); there is no user-controlled zoom yet.
+- **Zoom/offset transform:** fit-to-window remains the default, but user-controlled
+  zoom shipped later — see *UX polish* below.
 
 ### Simplification pass (2026-06-15)
 
@@ -212,6 +214,27 @@ on-disk `.kakico` JSON shape is unchanged — a legacy-fixture decode test guard
   or base image changes, not on every selection redraw) and shares `viewRect`/`drawHandle`
   helpers; crop corners reuse `cornerHandles()`/`HandleRole.opposite`. A shared
   `ImageLoader` deduplicates `CGImageSource` decoding.
+
+### UX polish (2026-07-06)
+
+- **User-controlled zoom.** `ZoomMath.swift` holds the pure geometry (fitted scale,
+  preset stepping, pan clamping, anchor-preserving zoom; unit-tested in
+  `Tests/KakicoTests`). Controls: a percent menu next to the size badge (presets
+  25–400% + Fit), View ▸ Zoom In/Out/Fit (⌘+ / ⌘− / ⌘0), cursor-anchored trackpad
+  pinch, and two-finger scroll panning when the zoomed image overflows. Zoom state is
+  transient view state on `CanvasController` (outside the undo stack) and resets to
+  fit on image load.
+- **Copy image on plain ⌘C** when no annotation is selected and no text editor is
+  focused (same key-monitor pattern as ⌘V); writes concrete PNG + TIFF bytes to the
+  pasteboard (not an `NSImage` promise) and confirms with a bottom-center toast.
+  ⇧⌘C stays as the File-menu item.
+- **Discard confirmation on every exit path.** ⌘Q, ⌘W, and the red close button all
+  show the same "unsaved annotations will be lost" alert *before* the window closes:
+  a `windowShouldClose` proxy wraps SwiftUI's window delegate (installed idempotently
+  at launch and on every `didBecomeMain`) and routes closes into
+  `applicationShouldTerminate`. Note: `CommandGroup(replacing: .saveItem)` removes the
+  system File ▸ Close item, so the app provides its own Close (⌘W) that sends
+  `performClose:`.
 
 ### Notable fix found during verification
 
