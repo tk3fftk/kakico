@@ -39,11 +39,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard controller.hasDocument else { return .terminateNow }
-        return ExportService.confirmDiscard(
+        if ExportService.confirmDiscard(
             message: "Quit Kakico?",
             info: "Quitting will discard the image you are editing. Unsaved annotations will be lost.",
             confirmTitle: "Quit"
-        ) ? .terminateNow : .terminateCancel
+        ) { return .terminateNow }
+        // Safety net: if a close path ever slipped past the windowShouldClose
+        // proxy, the window is already gone — bring it back so cancelling
+        // never strands a windowless app.
+        if !NSApp.windows.contains(where: { $0.isVisible && !($0 is NSPanel) }) {
+            NSApp.windows.first { !($0 is NSPanel) }?.makeKeyAndOrderFront(nil)
+        }
+        return .terminateCancel
     }
 
     /// Local monitor for a plain-⌘ letter shortcut. Field editors and the
@@ -99,24 +106,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // SwiftUI creates the main window (and installs its own delegate)
-        // after didFinishLaunching, so wrap that delegate once the window
-        // first becomes main.
+        // SwiftUI creates the main window (and installs its own delegate) on
+        // its own schedule around didFinishLaunching — possibly before this
+        // method runs — and may replace the delegate later. Sweep now, again
+        // after the current turn, and on every didBecomeMain; the installer
+        // is idempotent, so re-wrapping is a no-op.
+        NSApp.windows.forEach { installTerminationRouting(on: $0) }
+        DispatchQueue.main.async {
+            NSApp.windows.forEach { self.installTerminationRouting(on: $0) }
+        }
         windowHookObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main
         ) { [weak self] note in
             let window = note.object as? NSWindow
             MainActor.assumeIsolated {
-                guard let self, self.windowDelegateProxy == nil, let window else { return }
-                let proxy = TerminationRoutingWindowDelegate(wrapping: window.delegate)
-                self.windowDelegateProxy = proxy
-                window.delegate = proxy
-                if let observer = self.windowHookObserver {
-                    NotificationCenter.default.removeObserver(observer)
-                    self.windowHookObserver = nil
-                }
+                guard let self, let window else { return }
+                self.installTerminationRouting(on: window)
             }
         }
+    }
+
+    /// Wraps `window`'s delegate in the close→terminate routing proxy. Never
+    /// wraps panels (alerts, open/save sheets), and re-invoking for an
+    /// already-wrapped window is a no-op — safe to run on every didBecomeMain.
+    private func installTerminationRouting(on window: NSWindow) {
+        guard !(window is NSPanel),
+              !(window.delegate is TerminationRoutingWindowDelegate) else { return }
+        let proxy = TerminationRoutingWindowDelegate(wrapping: window.delegate)
+        windowDelegateProxy = proxy
+        window.delegate = proxy
     }
 }
 
@@ -193,6 +211,12 @@ struct AppCommands: Commands {
                 .keyboardShortcut("v", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .saveItem) {
+            // Replacing .saveItem removes the system Close item with it, so
+            // provide our own; performClose: routes through windowShouldClose
+            // and the quit confirmation like the red close button.
+            Button("Close") { NSApp.sendAction(#selector(NSWindow.performClose(_:)), to: nil, from: nil) }
+                .keyboardShortcut("w", modifiers: .command)
+            Divider()
             Button("Save Kakico Document…") { ExportService.saveDocument(controller) }
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(!controller.hasDocument)
