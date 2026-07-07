@@ -172,7 +172,7 @@ export class History {
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
 
-  push(pre: Snapshot): void;               // undoStack.push(pre); redoStack = []
+  push(pre: Snapshot): void;               // undoStack.push(pre); redoStack = []; bitmap 世代トリム(下記)
   undo(current: Snapshot): Snapshot | null; // pop undo → push current to redo → return popped
   redo(current: Snapshot): Snapshot | null; // 対称
   get canUndo(): boolean;
@@ -180,9 +180,13 @@ export class History {
   clear(): void;                            // load 時のみ
   allBitmaps(): Set<ImageBitmap>;           // close() 判定用
 }
+
+export const MAX_BITMAP_GENERATIONS = 20;  // undoStack が保持できる相異なる ImageBitmap 参照数の上限
 ```
 
-**スタック上限なし**(Swift と同じ)。`Document` はプレーンな値ツリーなのでスナップショットは参照コピーで可(mutate 系は常に新オブジェクトを返す — doc 03 の規約)。`ImageBitmap` は immutable なので参照共有で安全。**history から到達可能な bitmap に `close()` を呼んではならない**。`close()` してよいのは `load()` でスタックをクリアした時に、新しい bitmap 以外の到達不能 bitmap のみ。
+**document のみのスナップは上限なし**(参照コピーで安価。Swift と同じ)。`Document` はプレーンな値ツリーなのでスナップショットは参照コピーで可(mutate 系は常に新オブジェクトを返す — doc 03 の規約)。`ImageBitmap` は immutable なので参照共有で安全。
+
+**bitmap 世代には上限を設ける(意図的な Web 差分)**: Web の `ImageBitmap` はデコード済み(GPU/CPU)メモリを掴むため、5K スクリーンショットで crop を繰り返すと数十 MB 級の bitmap が undo スタックに積み上がり、Swift のプロセスモデルと違いタブ OOM に直結する。`push()` 内で undoStack 中の**相異なる bitmap 参照**を数え、`MAX_BITMAP_GENERATIONS` を超えたら最古側の undo エントリから削除して上限内に戻す。トリム後、current・undoStack・redoStack のいずれからも到達不能になった bitmap のみ `close()` する。**到達可能な bitmap への `close()` は従来どおり禁止**。`load()` 時の clear + 到達不能 bitmap close も従来どおり。
 
 `CanvasStore` 側のオーケストレーション(メソッド名は Swift と同一に保つ):
 
@@ -479,6 +483,8 @@ loadImage(bitmap: ImageBitmap, sourceName: string | null): void;
 
 デコード失敗時(`createImageBitmap` reject): `NSSound.beep()` の web 代替として `flashToast('Could not load image')`。
 
+デコード成功後、`bitmap.width * bitmap.height > 268435456`(256 MP、render の `MAX_PIXEL_COUNT` と同値)なら `bitmap.close()` して同じくトーストで拒否する。flatten の 256 MP ガードは出力時の防御であり、画面描画用 canvas の確保で落ちる前に**ロード入口で遮断**する(.kakico 経由の巨大 canvasSize は 03 の decode 値域検証が同様に遮断)。
+
 配線(`main.tsx`):
 
 - `window` の `paste` イベント: `clipboardData` から画像 Blob → `loadImage`。document が既にあれば ConfirmDialog(doc 07 まではとりあえず `window.confirm('Replace the current document?')` で代用可、ただし acceptance では動作すること)。
@@ -511,7 +517,7 @@ export class CanvasHost {
 
 1. `<canvas>` を生成し container に追加。`observeCanvasSize` で backing store を device px に設定、毎フレーム `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)`(以後 CSS px 座標系)。
 2. `store.subscribe` → `requestAnimationFrame` を 1 回だけスケジュール(rAF フラグ)。
-3. draw: document がなければ clear のみ。あれば `flatten(document, baseBitmap, 1, exportBounds)`(doc 04)を `documentVersion` キーでキャッシュし、
+3. draw: document がなければ clear のみ。あれば `flatten(document, baseBitmap, 1, exportBounds)`(doc 04)を `documentVersion` キーでキャッシュし(**暫定** — 本ステップの host にはドラッグ操作がなく document 変化はロード時のみのためこれで足りる。ドラッグが入る doc 06 §8 で「ドラッグ中は凍結・再 flatten は pointerup 時のみ」の確定仕様に置き換える。`documentVersion` は毎 pointermove で進むため、単独キーのまま 06 に進んではならない)、
    - `outSize = flatten 結果のサイズ`(= `outputRectFor(document, exportBounds)` の integral サイズ)
    - fit: `scale = fittedScale(outSize, viewportCssSize)`、`pan = {dx:0, dy:0}`(CanvasView の reconcileZoom: fit 中 pan は常に zero)
    - percent: `scale = clampedScale(zoomMode.scale, outSize, viewport)`、`pan = clampedPan(store.pan, contentSize(outSize, scale), viewport)`
@@ -574,7 +580,7 @@ localStorage を使うテスト(`tests/state/canvasStore.test.ts` の `exportBou
 | カラーデバウンス | `500` ms | 色変更の undo 合体窓 | CanvasController.swift:250 |
 | documentVersion | 書き込みごとに +1(等値でも加算) | flatten キャッシュ無効化キー | CanvasController.swift:11-17 |
 | undo 単位 | `{document, baseBitmap}` | crop がビットマップを交換するため | CanvasController.swift:70-73 |
-| undo スタック上限 | なし | | CanvasController.swift:79-80 |
+| undo スタック上限 | document のみのスナップは無制限 / bitmap 世代は `MAX_BITMAP_GENERATIONS = 20`(超過分は最古から破棄し到達不能 bitmap を close) | タブ OOM 防止の意図的 Web 差分 | CanvasController.swift:79-80(Swift は無制限) |
 | suggestedPointSize | `max(18, strokeWidth * 4)` | 線幅 → text pointSize | AnnotationModel/Geometry.swift:42-44 |
 | strokeWidthForPointSize | `pointSize / 4`(クランプなし) | 逆写像(スライダー反映) | AnnotationModel/Geometry.swift:48-50 |
 | crop 最小寸法 | 幅・高さとも `>= 2`(未満は degenerate → null) | `clampedCrop` | AnnotationModel/Document.swift:69-74 |
@@ -650,6 +656,8 @@ localStorage を使うテスト(`tests/state/canvasStore.test.ts` の `exportBou
 - `redo is symmetric` — undo → redo で最新状態に戻る
 - `clampSelection nils removed selection` — 選択中の要素を含む状態へ undo で消えたら `selection === null`
 - `undo does not restore selection, tool, zoom` — undo 前後で tool / zoomMode が不変
+- `history trims bitmap generations beyond the cap and closes evicted bitmaps` — 相異なるダミー bitmap を持つ snapshot を 21 世代 push → undoStack 内の bitmap 世代が 20 に縮み、evict された bitmap の `close` が呼ばれ、current / 残存スナップ / redo の bitmap は close されない
+- `document-only snapshots are not trimmed` — 同一 bitmap を共有する snapshot を 100 件 push → 全件 undo 可能(トリムなし)
 
 ### `tests/state/colorDebounce.test.ts`(`vi.useFakeTimers()`)
 

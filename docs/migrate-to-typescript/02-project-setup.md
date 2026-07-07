@@ -148,7 +148,7 @@ export default defineConfig({
       // Service Worker の登録・更新トーストはマイルストーン 09 で有効化。
       // ここでは manifest 生成のみを目的とする。
       injectRegister: false,
-      registerType: 'autoUpdate',
+      registerType: 'prompt', // 09 §1 の確定値(新 SW は Reload まで waiting・旧 precache 保持)
       manifest: {
         name: 'Kakico',
         short_name: 'Kakico',

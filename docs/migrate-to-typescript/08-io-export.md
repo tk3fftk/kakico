@@ -19,6 +19,7 @@
 - `kakico-web/src/platform/files.ts`
 - `kakico-web/src/platform/clipboard.ts`
 - `kakico-web/src/platform/dragOut.ts`
+- `kakico-web/src/platform/errorLog.ts`（致命イベントのローカルエラーログ。§10 と 09 が使用）
 - `kakico-web/src/platform/exportService.ts` （`ExportService.swift` 対応のオーケストレーション層。§2 のディレクトリツリーへの追加ファイル — `platform/` 配下で他 4 モジュール + `render/` + `state/` を束ねる）
 - `kakico-web/tests/platform/files.test.ts`
 - `kakico-web/tests/platform/exportService.test.ts`
@@ -61,7 +62,7 @@ export function imageBlobFromClipboardEvent(e: ClipboardEvent): Blob | null;
   - `bitmapFromBlob(blob: Blob): Promise<ImageBitmap>` → `loadBitmap(source: Blob): Promise<ImageBitmap>`
   - `imageBlobFromDataTransfer(dt: DataTransfer): Blob | null` → `imageFileFromDataTransfer(dt: DataTransfer): File | null`（`File` を返すことで `file.name` を sourceName 継承に使える。生画像 item のフォールバックは §5 参照）
   - 05 で配線済みの呼び出し側（drop リスナー等）も新名称に追従させる。
-- ダウンスケール・サムネイル化は行わない（Swift 同様、フル解像度の第 1 フレームをそのまま使用。サイズガードは `flatten` の 256 MP 上限のみ）。
+- ダウンスケール・サムネイル化は行わない（Swift 同様、フル解像度の第 1 フレームをそのまま使用）。ただし `loadBitmap` はデコード成功後に `bitmap.width * bitmap.height > 268435456`（256 MP）なら `bitmap.close()` して `IOError('too-large')` を throw する（05 §9 と同一ガード。flatten の 256 MP 上限は出力側の防御で、画面描画確保はロード入口で遮断する）。
 - EXIF orientation: `createImageBitmap` のデフォルト `imageOrientation: 'from-image'` を採用。**意図的な差分** — Swift は orientation を無視するが（`CGImageSourceCreateImageAtIndex` はオプションなし）、スクリーンショット用途では orientation タグが付かないため実質パリティ。コード中にこの差分をコメントで明記すること。
 - `canvasSize` はデコード結果の `bitmap.width` / `bitmap.height`（ネイティブピクセル）から設定（≙ `CanvasController.swift:103`）。Retina 乗算は一切しない。
 
@@ -72,6 +73,13 @@ export const hasFSAccess: boolean; // 'showOpenFilePicker' in window
 
 /** basename without the last extension: "shot.png" → "shot". */
 export function basename(name: string): string; // name.replace(/\.[^.]+$/, '')
+
+/** Strip characters that break DownloadURL payloads (`mime:filename:url` — ':' is structural)
+ *  and cross-platform filenames: control chars (U+0000–U+001F, U+007F), ':', '/', '\', CR/LF.
+ *  Each run collapses to '_'. Empty/whitespace-only result falls back to 'annotated'.
+ *  sourceName はドロップされたファイル名由来の untrusted 入力 — drag-out / File 生成 /
+ *  export suggestedName に渡す前に必ずこれを通す。 */
+export function sanitizeFilename(name: string): string;
 
 /** Format from a chosen filename's extension (lowercased).
  *  ≙ ExportService.swift:53-54 — jpg/jpeg → JPEG, anything else → PNG. */
@@ -145,7 +153,7 @@ export async function pngBlob(state: CanvasState): Promise<Blob>; // throws IOEr
 export async function copyToClipboard(store: CanvasStore): Promise<void>;
 
 /** ≙ ExportService.exportPanel + export(to:as:).
- *  suggestedName = `${basename(sourceName) ?? 'annotated'}.png`
+ *  suggestedName = `${sanitizeFilename(basename(sourceName)) ?? 'annotated'}.png`
  *  picker types: [{description:'PNG image', accept:{'image/png':['.png']}},
  *                 {description:'JPEG image', accept:{'image/jpeg':['.jpg','.jpeg']}}]
  *  Format = exportTypeForFilename(chosen name); JPEG quality 0.9.
@@ -259,7 +267,7 @@ replaceDocument(doc: Document): void   // document = doc; documentVersion += 1
 
 3. `exportPanel` の詳細フロー:
    1. `state.document` なし → `flashToast(IO_ERRORS.exportFailed)`（Swift は beep）。
-   2. `suggestedName = `${state.sourceName ? basename(state.sourceName) : 'annotated'}.png``。
+   2. `suggestedName = `${state.sourceName ? sanitizeFilename(basename(state.sourceName)) : 'annotated'}.png``。
    3. FS Access あり: picker → 選択名から `exportTypeForFilename` で形式決定 → `flatten` → `encode(canvas, type, 0.9)` → 書き込み。`flatten` が null（256 MP 超）→ `tooLarge` トースト。書き込み throw → `exportFailed` トースト。
    4. FS Access なし: PNG 固定で `downloadBlob(pngBlob, suggestedName)`。
    5. pending crop は **適用せず** に反映される（`flatten` が `doc.outputRect(for: bounds)` を使うため。`Document.swift:27-29,41-46`）。`expandToFit` では pending crop の外側の要素が出力をさらに拡張する点も Swift 通り。
@@ -283,13 +291,13 @@ export interface DragOutController {
 export function createDragOutController(): DragOutController;
 ```
 
-- `onDragStart` の中身:
+- `onDragStart` の中身（`filename` は必ず `sanitizeFilename` 済みであること — DownloadURL は `mime:filename:url` のコロン区切りで、名前中の `:`・改行・パス区切りがペイロード構造と保存ファイル名を破壊する。細工されたファイル名の画像を開いて drag-out すると発火する注入点）:
   ```ts
   e.dataTransfer.setData('DownloadURL', `image/png:${filename}:${objectUrl}`);
   e.dataTransfer.items.add(new File([blob], filename, { type: 'image/png' })); // Web ターゲット向け
   e.dataTransfer.effectAllowed = 'copy';   // ≙ .copy (UI.swift:492)
   ```
-- filename はエクスポートと同一規約: `` `${basename(sourceName) ?? 'annotated'}.png` `` （`UI.swift:497-498`）。
+- filename はエクスポートと同一規約: `` `${sanitizeFilename(basename(sourceName)) ?? 'annotated'}.png` `` （`UI.swift:497-498`）。
 - ペイロードは prepare 時点のスナップショット — ドラッグ中の編集は落ちるファイルに反映されない（≙ mouseDown 時キャッシュ、`UI.swift:487-489`）。
 - `ActionBar.tsx`: `isDragOutSupported()` が false のとき well を **非表示**（アーキテクチャ決定 §6。コピーが代替）。well は 32×32、`draggable` 属性付き `<div>`、tooltip `"Drag out to share as PNG"`、document なしで disabled 見た目 + `draggable=false`。
 
@@ -333,21 +341,42 @@ export function createDragOutController(): DragOutController;
 export function loadExportBounds(): ExportBounds;
 export function saveExportBounds(bounds: ExportBounds): void;
 
-export interface AutosaveRecord {
-  docJSON: string;            // encodeDocument(doc) — baseImage は placeholder のまま（PNG は別フィールド）
-  imagePng: Blob | null;      // baseBitmap の PNG。bitmap の identity が変わったときだけ再エンコード
+// IndexedDB: db 'kakico' version 1、objectStore を meta / image に分離する。
+//   'meta'  — key 'current': { docJSON, sourceName, imageGeneration, savedAt }
+//   'image' — key 'current': { generation: number, png: Blob }
+// 分離の理由: autosave は documentVersion が動くたび（注釈ドラッグごと、2 s debounce）に走る。
+// 単一レコードだと数 MB の imagePng Blob が毎回丸ごと put される書込み増幅になり、
+// quota 到達（= 保存の沈黙失敗）を早める。doc だけの変更では軽い meta のみを put する。
+export interface AutosaveMeta {
+  docJSON: string;            // encodeDocument(doc) — baseImage は placeholder のまま（PNG は image ストア）
   sourceName: string | null;
+  imageGeneration: number;    // 参照する image レコードの世代
   savedAt: number;            // Date.now()
 }
-// IndexedDB: db 'kakico' version 1, objectStore 'autosave', key 'current'
-export async function saveAutosave(record: AutosaveRecord): Promise<void>;
+export interface AutosaveRecord {  // loadAutosave の合成結果
+  docJSON: string; imagePng: Blob; sourceName: string | null; savedAt: number;
+}
+export async function saveAutosaveMeta(meta: AutosaveMeta): Promise<void>;
+export async function saveAutosaveImage(generation: number, png: Blob): Promise<void>;
 export async function loadAutosave(): Promise<AutosaveRecord | null>;
+// meta.imageGeneration !== image.generation（片方だけ書けた等）は不整合として null を返し clearAutosave()
 export async function clearAutosave(): Promise<void>;
 ```
 
-- 配線（`main.tsx`）: store を subscribe し、`documentVersion` 変化後 **2000 ms** debounce で `saveAutosave`。`imagePng` は `baseBitmap` の参照が前回と異なるときのみ再エンコード。`document === null` になったら `clearAutosave()`。
+`src/platform/errorLog.ts`（外部送信なしのローカルログ。オフライン PWA は運用者が端末に入れないため、「ユーザーがコピーして貼れるエラー詳細」が事実上唯一の再現手段になる）:
+
+```ts
+/** sessionStorage 'kakico.errors' に {ts, code, detail} を最大 50 件のリングバッファで保持。 */
+export function logError(code: string, detail?: unknown): void;
+export function readErrorLog(): string;   // 整形済みテキスト（コピー用）
+```
+
+- 配線（`main.tsx`）: store を subscribe し、`documentVersion` 変化後 **2000 ms** debounce で保存。`baseBitmap` の参照が前回と異なるとき（load / applyCrop 後）のみ PNG を再エンコードして `saveAutosaveImage`（generation +1）→ `saveAutosaveMeta`、それ以外は `saveAutosaveMeta` のみ。`document === null` になったら `clearAutosave()`。
+- **永続ストレージの要求**: 初回の autosave 前に `navigator.storage?.persist?.()` を一度呼ぶ（ブラウザ都合の eviction で自動保存が黙って消えるのを抑止。拒否されても動作は継続）。
+- **保存失敗の可視化**: quota / IndexedDB エラーは握り潰さない。初回失敗時に 1 回だけ `flashToast('Autosave unavailable — save your work manually')` + `logError('autosave-failed', e)`、以後の連続失敗は console.warn のみ（トースト連打防止フラグ）。成功が戻ったらフラグをリセット。
 - 起動時復元: `loadAutosave()` が record を返し、かつ launch ファイル（09 の launchQueue）が無い場合、`confirmDiscard('Restore previous session?', 'A document from your last session was found.', 'Restore')` を表示。confirm → `docJSON` を `decodeDocument`、`imagePng` を `loadBitmap` → `loadImage` + `replaceDocument`。cancel → `clearAutosave()`。
-- autosave の失敗（quota 等）はサイレント（console.warn のみ。ユーザー操作を妨げない）。
+- **復元の decode / loadBitmap は try/catch で囲む（必須）**: バージョン跨ぎ・破損レコードで throw するとアプリ起動そのものがブロックされ、リロードしても真っ白のままになる。失敗時は `clearAutosave()` してクリーン起動 + `logError('restore-failed', e)`。なお try/catch が救えるのは throw する破損データだけで、「throw せず巨大確保に成功する」悪性値（巨大 canvasSize 等）は 03 の decode 値域検証が CodecError に変換する — **両方が揃って初めて「悪性 .kakico を一度開くと自動保存 → リロードごとに再クラッシュ」の永続 DoS ループを断てる**。
+- 平文残留の注記: autosave は機密を含み得る画像と文書を IndexedDB に**平文で**保持する。document を閉じた（= null になった）とき・復元キャンセル時・復元失敗時に必ず `clearAutosave()` すること。暗号化はスコープ外（鍵の置き場が同一 origin にしかなく実効性がない）。
 
 ### 11. `beforeunload` ガード（`main.tsx`）
 
@@ -404,7 +433,12 @@ export function confirmDiscard(message: string, info: string, confirmTitle: stri
 | ⌘V | インターセプトしない（paste イベント経由）。textarea フォーカス時はテキストペーストを通す | KakicoApp.swift:74-77 |
 | 終了ガード | document が存在する限り `beforeunload` で確認（dirty tracking なし） | KakicoApp.swift:40-54 |
 | 失敗時フィードバック | Swift: beep / NSAlert → Web: `IO_ERRORS` トーストに統一。picker キャンセルは無音 | ExportService.swift 各所 |
-| autosave | IndexedDB `kakico`/`autosave`/`current`、debounce 2000 ms（Web 新設。Swift に相当なし — アーキテクチャ §8 準拠） | — |
+| autosave | IndexedDB `kakico`、objectStore `meta` / `image` 分離（doc-only 変更は meta のみ put）、debounce 2000 ms（Web 新設。Swift に相当なし — アーキテクチャ §8 準拠） | — |
+| autosave 失敗時 | 初回のみトースト `"Autosave unavailable — save your work manually"` + `logError`、以後 console.warn | — |
+| storage.persist() | 初回 autosave 前に一度要求（拒否でも続行） | — |
+| 復元失敗時 | try/catch → `clearAutosave()` でクリーン起動 + `logError('restore-failed')` | — |
+| filename サニタイズ | 制御文字・`:`・`/`・`\`・改行 → `_`、空なら `'annotated'`。drag-out / File 生成 / export suggestedName に適用 | — |
+| エラーログ | sessionStorage `kakico.errors`、リングバッファ最大 50 件、外部送信なし | — |
 | ⌘S ハンドル再利用 | 2 回目以降サイレント上書き + `'Saved'` トースト（Web 改善。Swift は毎回 panel — アーキテクチャ §6 準拠） | — |
 
 ## 受け入れ基準
@@ -431,6 +465,7 @@ export function confirmDiscard(message: string, info: string, confirmTitle: stri
 `tests/platform/files.test.ts`（node env）:
 - `basename strips only the last extension` — `basename('a.b.png') === 'a.b'`, `basename('shot') === 'shot'`
 - `exportTypeForFilename maps jpg/jpeg case-insensitively` — `'x.JPG'`/`'x.jpeg'` → `'image/jpeg'`; `'x.png'`/`'x.webp'`/`'x'` → `'image/png'`（Swift 規則: jpg/jpeg 以外はすべて PNG）
+- `sanitizeFilename strips DownloadURL-breaking characters` — `'a:b/c\\d\ne'` → `'a_b_c_d_e'`; 制御文字入りが除去される; `':::'`/`''` → `'annotated'`; 通常名 `'shot 2024'` は不変
 
 `tests/platform/exportService.test.ts`（node env、files/clipboard をモック）:
 - `export default filename inherits source basename` — `sourceName: 'shot.png'` → suggestedName `'shot.png'`; `sourceName: null` → `'annotated.png'`
@@ -451,8 +486,10 @@ export function confirmDiscard(message: string, info: string, confirmTitle: stri
 
 `tests/platform/persistence.browser.test.ts`（vitest browser mode、実 IndexedDB / localStorage。ファイル名の `.browser.test.ts` サフィックスと vite.config の include 拡大により browser プロジェクトで実行される）:
 - `exportBounds round-trips through localStorage with expandToFit default` — 未設定時 `'expandToFit'`、`saveExportBounds('clipToImage')` 後に read back
-- `autosave record round-trips through IndexedDB` — `saveAutosave` → `loadAutosave` で docJSON / sourceName / imagePng サイズ一致
-- `clearAutosave removes the record` — clear 後 `loadAutosave() === null`
+- `autosave record round-trips through IndexedDB` — `saveAutosaveImage` + `saveAutosaveMeta` → `loadAutosave` で docJSON / sourceName / imagePng サイズ一致
+- `doc-only change writes the meta store only` — image 保存後に meta を 2 回更新 → image ストアのレコード（generation / Blob）が不変
+- `generation mismatch yields null` — meta.imageGeneration と image.generation を意図的にずらす → `loadAutosave() === null` かつレコードがクリアされる
+- `clearAutosave removes both stores` — clear 後 `loadAutosave() === null`
 
 `tests/state/canvasStore.test.ts` に追加（node env）:
 - `loadImage resets undo, selection, zoom and closes the old bitmap` — 事前に undo 積み → loadImage 後 `canUndo === false`、`selection === null`、`zoomMode.kind === 'fit'`、旧 bitmap の `close` 呼出

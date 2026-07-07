@@ -6,6 +6,14 @@ macOS アプリ Kakico（Swift / SwiftUI、`Sources/**`）を TypeScript 製 PWA
 
 対象機能はモデル実装済みの 6 種（`arrow | line | rectangle | ellipse | text | pixelate`）+ `crop`。`blur` / `stamp` は post-parity（コーデックに discriminant のみ予約）。
 
+### 移行の動機
+
+動作中のネイティブアプリを新機能ゼロのパリティで書き直す投資であるため、目的を明記する。
+
+- **配布**: 署名・公証・手動アップデート配布（現状は ad-hoc 署名の `build/Kakico.app`）を、URL 配布 + PWA 自動更新に置き換える。
+- **クロスプラットフォーム**: macOS 15 限定の実装を Windows / Linux / ChromeOS を含む任意のモダンブラウザへ広げる。
+- **将来機能の土台**: `blur` / `stamp` / `share_target` などの post-parity 拡張は Web 側で実装する前提。パリティ達成が拡張の前提条件。
+
 ### スコープ規則
 
 - 本ディレクトリ `docs/migrate-to-typescript/` は計画ドキュメントのみ。実装コードは置かない。

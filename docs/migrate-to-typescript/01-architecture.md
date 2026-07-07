@@ -50,7 +50,7 @@ kakico-web/                          # リポジトリ直下 kakico-web/ に配�
 │   │   ├── handle.ts                # HandleRole ユニオン, oppositeCorner(), cornerHandles(), movingCorner()
 │   │   ├── document.ts              # Document, ExportBounds, outputRect/expandedOutputRect, hitTest(前面→背面), clampedCrop, add/remove/bringToFront/mutate — 全て純粋、新 Document を返す
 │   │   ├── pointerTarget.ts         # resolvePointer(doc, point, selection, tolerances) → handle | body | selectionFrame | empty
-│   │   └── codec.ts                 # .kakico JSON encode/decode(Swift Codable のワイヤ形状を厳密再現)+ "version" フィールド。'blur'/'stamp' discriminant を予約
+│   │   └── codec.ts                 # .kakico JSON encode/decode(Swift Codable のワイヤ形状を厳密再現)+ "version" フィールド + decode 値域ガード(canvasSize 256 MP / 要素数 / 座標クランプ)。'blur'/'stamp' discriminant を予約
 │   ├── render/                      # ≙ Sources/AnnotationRender — model のみ import、ctx を受け取る
 │   │   ├── renderer.ts              # render(document, ctx, scale, opts) — 唯一の純粋描画関数(§レンダリング参照)
 │   │   ├── text.ts                  # 決定的 measureText 折り返し + suggestedSize()。renderer と editor が共有する唯一の wrap アルゴリズム
@@ -60,10 +60,10 @@ kakico-web/                          # リポジトリ直下 kakico-web/ に配�
 │   ├── state/                       # ≙ Sources/Kakico/CanvasController.swift
 │   │   ├── store.ts                 # 汎用 observable store: getSnapshot/subscribe/update(microtask バッチ通知)
 │   │   ├── canvasStore.ts           # アプリ store 形状(§状態管理参照)+ アクション: applyCrop/cancelCrop, selectStrokeColor, setTool, flashToast…
-│   │   ├── history.ts               # スナップショット undo/redo {document, baseBitmap}。beginInteraction/commitInteraction/perform。500 ms 色デバウンス統合
+│   │   ├── history.ts               # スナップショット undo/redo {document, baseBitmap}。beginInteraction/commitInteraction/perform。500 ms 色デバウンス統合。bitmap 世代は上限 20(超過分を close — タブ OOM 防止)
 │   │   └── tool.ts                  # Tool ユニオン + ラベル + ショートカットキー + アイコン id(≙ Tool.swift)
 │   ├── engine/                      # ≙ Sources/Kakico/CanvasView.swift + ZoomMath.swift — framework-free
-│   │   ├── CanvasHost.ts            # <canvas> を所有。DPR サイズ調整、rAF バッチ描画、documentVersion キーの flatten キャッシュ、レイヤ合成、dispose()
+│   │   ├── CanvasHost.ts            # <canvas> を所有。DPR サイズ調整、rAF バッチ描画、flatten キャッシュ(ドラッグ中凍結 — §レンダリング)、レイヤ合成、dispose()
 │   │   ├── zoomMath.ts              # ZoomMath.swift の 1:1 移植(fittedScale, clampedScale, clampedPan, imageRect, panPreservingPoint/Center, presets, percentLabel)
 │   │   ├── displayMapping.ts        # DisplayInfo 移植: modelToView/viewToModel/viewRect/modelTolerance(純粋)
 │   │   ├── dragMachine.ts           # 純粋ドラッグ状態機械: (state, event, doc, tool, mapping) → {state, docPatch, selection}。状態 none|moving|handle|creating|cropping|movingCrop(≙ CanvasNSView.Drag)
@@ -77,7 +77,8 @@ kakico-web/                          # リポジトリ直下 kakico-web/ に配�
 │   │   ├── clipboard.ts             # paste イベント主経路。ボタンは navigator.clipboard.read。copy は Promise<Blob> 値の ClipboardItem(Safari 対応)
 │   │   ├── files.ts                 # showOpen/SaveFilePicker + ⌘S 用ハンドル再利用。<input type=file>/<a download> フォールバック。launchQueue consumer
 │   │   ├── dragOut.ts               # dragstart DownloadURL(Chromium)+ image/png アイテム。非対応環境ではウェルを隠す
-│   │   ├── persistence.ts           # localStorage(exportBounds 設定)+ IndexedDB 自動保存(クラッシュ/リロード復旧)
+│   │   ├── persistence.ts           # localStorage(exportBounds 設定)+ IndexedDB 自動保存(meta/image ストア分離。クラッシュ/リロード復旧)
+│   │   ├── errorLog.ts              # 致命イベント(autosave/復元/SW 登録失敗)のローカルログ。sessionStorage リングバッファ、外部送信なし
 │   │   └── exportService.ts         # ≙ ExportService.swift のオーケストレーション — files/clipboard + render/ + state/ を束ねる
 │   ├── ui/                          # ≙ UI.swift + Theme.swift — Preact chrome。state のみ import、engine 内部は参照禁止
 │   │   ├── App.tsx                  # ≙ ContentView: ボード背景 + ドットグリッド、CanvasMount または EmptyState、フローティングオーバーレイ配置
@@ -176,8 +177,8 @@ render(document: Document, ctx: CanvasRenderingContext2D, scale: number,
 
 `CanvasHost` の二層合成(Mac 版のソフトな補間ズームを改善):
 
-- **Layer A(キャッシュ済みラスタ)**: ベース画像 + pixelate エフェクトを `OffscreenCanvas` にフラット化。キーは(redaction に影響する状態の documentVersion, baseBitmap)。
-- **Layer B(ライブベクタ)**: arrow/line/rect/ellipse/text を毎 rAF、`devicePixelRatio × zoom` のフル解像度で可視キャンバスに直接再描画。数十パス程度で常にシャープ。
+- **Layer A(キャッシュ済みラスタ)**: ベース画像 + pixelate エフェクトを `OffscreenCanvas` にフラット化。キーは(pixelate 要素配列の値比較, baseBitmap 参照)。**`documentVersion` 単独をキーにしない** — documentVersion はドラッグの毎 pointermove で進むため、キーにすると 4K 画像で毎フレーム全面再合成 + canvas 再確保が走る。ドラッグ中(`dragDisplayInfo != null`)は Layer A を凍結し、再 flatten は `commitInteraction`(pointerup)時と非ドラッグ経路の変化時のみ(確定仕様は 06 §8)。
+- **Layer B(ライブベクタ)**: arrow/line/rect/ellipse/text を毎 rAF、`devicePixelRatio × zoom` のフル解像度で可視キャンバスに直接再描画。数十パス程度で常にシャープ。ドラッグ中の要素(pixelate 含む)はここでライブ描画する。
 - **エクスポート経路**: `flatten()` が `render()` を scale 1 で OffscreenCanvas に実行。`exportBounds` を尊重(expandToFit は白塗り)、256 MP ガード(`Sources/AnnotationRender/Renderer.swift:35-36` の移植)、その後 `encode()`。
 
 **devicePixelRatio 戦略**: バッキングストアは `ResizeObserver` の `devicePixelContentBoxSize` からサイズ決定(Safari は `contentRect × devicePixelRatio` フォールバック)。毎フレーム `ctx.setTransform(dpr,0,0,dpr,0,0)` を適用し engine コードは全て CSS px(AppKit points の対応物)で記述。モニタ移動やブラウザズームによる DPR 変化は再帰 `matchMedia('(resolution: …dppx)')` リスナーで捕捉。
@@ -197,8 +198,9 @@ render(document: Document, ctx: CanvasRenderingContext2D, scale: number,
 ## PWA 構成
 
 - **Manifest**: `name/short_name: Kakico`、`display: standalone`、`theme_color`/`background_color` はテーマトークンから、maskable アイコン 192/512、`launch_handler: {client_mode: 'focus-existing'}`(単一ウィンドウモデル)、`.kakico` + `image/png|jpeg|webp` の `file_handlers` を `window.launchQueue.setConsumer` で消費。v1 に `share_target` なし(デスクトップ優先。パリティ後に再検討)。
-- **Service worker**: `vite-plugin-pwa` の `generateSW`。app shell 全体(同梱フォント含む)を precache。`registerType: 'autoUpdate'` + 「Reload to update」toast。**ユーザーデータの runtime caching は禁止** — ドキュメントはファイル/IndexedDB に置き、SW キャッシュには入れない。初回ロード後は完全オフライン動作。
-- **ガード**: `dirty` 時の `beforeunload`。クラッシュ/リロード復旧用の IndexedDB 自動保存。
+- **Service worker**: `vite-plugin-pwa` の `generateSW`。app shell 全体(同梱フォント含む)を precache。`registerType: 'prompt'` + 「Reload to update」toast(新 SW は Reload まで waiting・旧 precache 保持 — autoUpdate は表示中ページの遅延チャンクを破壊するため不採用。09 §2)。**ユーザーデータの runtime caching は禁止** — ドキュメントはファイル/IndexedDB に置き、SW キャッシュには入れない。初回ロード後は完全オフライン動作。
+- **ホスティング要件**: `sw.js` / `index.html` / `manifest` は `Cache-Control: no-cache`、ハッシュ付きアセットは `immutable` 長期。CSP meta を `index.html` に同梱(09 §11 の表が正)。sw.js が長期キャッシュされると更新機構が本番で死ぬため、ヘッダ設定はデプロイの必須要件。
+- **ガード**: `dirty` 時の `beforeunload`。クラッシュ/リロード復旧用の IndexedDB 自動保存(meta / image ストア分離、保存失敗はトースト可視化 — 08 §10)。`decodeDocument` の値域検証(canvasSize 256 MP・要素数・座標クランプ — 03 §7)がファイルオープンと自動復元の両経路を守る。
 
 ## テスト戦略
 

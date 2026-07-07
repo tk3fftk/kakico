@@ -450,6 +450,11 @@ Swift の synthesized `Codable` + `JSONEncoder` の出力形状を**逐語再現
 export const KAKICO_FORMAT_VERSION = 1;
 export class CodecError extends Error {}
 
+// decode 値域ガード(悪性・破損 .kakico による巨大メモリ確保 / OOM の入口遮断。デコード規則 8-11)
+export const MAX_DECODE_CANVAS_PIXELS = 268435456; // 256 MP — render 側 MAX_PIXEL_COUNT と同値
+export const MAX_DECODE_ELEMENTS = 10000;
+export const MAX_DECODE_COORD = 16777216;          // 2^24 — 座標・寸法の絶対値上限
+
 export function encodeDocument(doc: Document): string;   // JSON 文字列
 export function decodeDocument(json: string): Document;  // 不正入力は CodecError を throw
 
@@ -517,6 +522,12 @@ export function base64ToBytes(s: string): Uint8Array;    // 不正文字は Code
 5. UUID は小文字化して `ElementID` へ。形式不正(`8-4-4-4-12` 16 進でない)は `CodecError`。
 6. 未知の annotation case キー(`blur`/`stamp` 含む)・未知の `ImageRef` case は `CodecError`。
 7. 必須キー欠落・型不一致は `CodecError`(メッセージにキーパスを含める)。
+8. **数値の値域検証(必須)**: すべての数値フィールドは有限(`Number.isFinite`)であること。NaN / ±Infinity は `CodecError`。JSON パースが通っても「throw せず巨大確保に成功する」値を許してはならない。
+9. `canvasSize`: 両辺 `0 < v <= MAX_DECODE_COORD` かつ `width * height <= MAX_DECODE_CANVAS_PIXELS`。違反は `CodecError`。flatten の 256 MP ガードはエクスポート経路の防御であり、**画面描画 canvas の確保はデコード時点で遮断する**(`canvasSize: [1e9, 1e9]` のような値で `replaceDocument` → 描画確保 → タブ OOM を防ぐ)。
+10. `elements.length <= MAX_DECODE_ELEMENTS`。超過は `CodecError`。
+11. 座標・寸法(`start` / `end` / `rect` / `origin` / `size` / `crop` の各成分)は `|v| <= MAX_DECODE_COORD` に**クランプ**(範囲外は最寄り値へ丸め、throw しない — 正当だが極端なファイルを開けなくしない)。スタイル値もクランプ: `width`(線幅)は `[0, 1000]`、`amount` は `[1, 1000]`、`font.pointSize` は `[1, 1000]`。
+
+この検証はすべて `decodeDocument` **内部**に置く。ファイルオープン(⇧⌘O / launchQueue)と autosave 復元(doc 08)の両経路が同一のガードを通ることを構造で保証する。
 
 エンコード規則: `version: 1` を必ず書く。`crop === null` / `fill === null` はキー省略。キー順は任意(比較は常に値で行う)。
 
@@ -629,6 +640,9 @@ ESLint boundary ルール(02 で設定済み)が `src/model/**` の DOM import �
 | テスト代表トレランス | body `8` / handle `8` | Tests/AnnotationModelTests/PointerTargetTests.swift:25 ほか |
 | `containsPoint` | 半開区間(max 辺排他)、非正サイズは false | CGRect.contains 互換 |
 | `integral` | origin floor、max 辺 ceil | CGRect.integral 互換 |
+| `MAX_DECODE_CANVAS_PIXELS` | `268435456`(256 MP。超過 canvasSize は CodecError) | web 独自(OOM/DoS 防御。render の MAX_PIXEL_COUNT と同値) |
+| `MAX_DECODE_ELEMENTS` | `10000`(超過は CodecError) | web 独自 |
+| `MAX_DECODE_COORD` | `16777216`(2^24。座標・寸法のクランプ上限) | web 独自 |
 
 ## 受け入れ基準
 
@@ -754,6 +768,10 @@ vitest(node 環境)。`acc = 4`(`toBeCloseTo` の桁数、Swift の accuracy 0.0
 | (追加) | `reserved kinds throw CodecError` | `{"blur":{"_0":{}}}` / `{"stamp":{"_0":{}}}` を含む elements のデコードが `CodecError` を throw |
 | (追加) | `base64 round-trips` | ランダム長 0/1/2/3/255 バイトの `base64ToBytes(bytesToBase64(b))` = b; 不正文字列は CodecError |
 | (追加) | `uuid is lowercased and validated` | 大文字 UUID 入力 → 小文字で保持; `"not-a-uuid"` → CodecError |
+| (追加) | `decode rejects non-finite numbers` | `canvasSize: [NaN, 480]` / `"width": Infinity` 相当の JSON(文字列組み立てで注入)→ CodecError |
+| (追加) | `decode rejects oversized canvasSize` | `canvasSize: [1e9, 1e9]` → CodecError; `[20000, 20000]`(400 MP)→ CodecError; `[640, 480]` は通る |
+| (追加) | `decode rejects too many elements` | 要素 10001 件 → CodecError; 10000 件は通る |
+| (追加) | `decode clamps style values and coordinates` | `width: 1e9` → 1000、`amount: 0` → 1、`pointSize: 1e6` → 1000、座標 `1e12` → `MAX_DECODE_COORD` にクランプ(throw しない) |
 
 legacy fixture(`Tests/AnnotationModelTests/AnnotationModelTests.swift:70-75` から逐語コピーしてテストに埋め込む):
 

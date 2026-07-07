@@ -34,6 +34,7 @@
 | `kakico-web/tests/render/encode.browser.test.ts` | browser mode |
 | `kakico-web/vite.config.ts` | vitest projects に browser mode(playwright provider)を追加 |
 | `kakico-web/package.json` | devDependencies: `@vitest/browser`, `playwright` |
+| `.github/workflows/kakico-web-ci.yml` | 変更: Playwright ブラウザの install + `actions/cache`(手順 9) |
 
 ESLint 境界: `src/render/` は `src/model/` のみ import 可。`document`/`window`/`navigator` への参照禁止(引数で受け取る ctx / ImageBitmap / OffscreenCanvas 型のみ許可)。
 
@@ -172,6 +173,8 @@ export const LINE_HEIGHT_RATIO = TEXT_ASCENT_RATIO + TEXT_DESCENT_RATIO; // 1.20
 3. 単語単体が `width` を超える場合は文字単位で分割(1 行最低 1 文字 — 無限ループ防止)。
 4. 戻り値は折り返し済み行の配列。トリムしない(空白は保持)。
 
+**`wrapLines` のメモ化(必須)**: `render()` は 06 の Layer B で毎フレーム(pan / zoom / ドラッグ / ants tick ごと)全テキストを描画するため、無メモ化だと語ごとの `measureText` が O(総単語数)/フレームで走る。モジュールレベルの `Map<string, string[]>` に `` `${fontString(font)}|${width}|${str}` `` をキーとして結果をキャッシュし、エントリ数上限 512(超過時は `Map` の挿入順先頭から削除)。measurer が同一フォント登録下で決定的であることが前提(手順 0 の同梱 Inter)。テスト用に `clearWrapCache()` を export する。
+
 **`suggestedSize`**(Renderer.swift:169-179 の移植):
 
 ```ts
@@ -216,7 +219,7 @@ const cols = Math.max(1, Math.ceil((gx1 - gx0) / blockSize));
 const rows = Math.max(1, Math.ceil((gy1 - gy0) / blockSize));
 ```
 
-4. **縮小(= ブロック平均)**: `small = new OffscreenCanvas(cols, rows)`; `sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = 'high'`; `sctx.drawImage(base, gx0, gy0, gx1 - gx0, gy1 - gy0, 0, 0, cols, rows)`。**ソースは base 画像のみ** — 先に描かれたアノテーションはサンプルしない(Renderer.swift:201。pixelate の下の注釈は base のピクセレートで置き換わって見える)。
+4. **縮小(= ブロック平均)**: スクラッチ用 `OffscreenCanvas` を**モジュールレベルで 1 枚保持して使い回す**(render は毎フレーム走るため、呼び出しごとの `new OffscreenCanvas` は pixelate 要素 × フレーム数の確保 = GC 圧になる)。現在サイズが `cols × rows` に満たないときだけ拡大リサイズ(grow-only)、`sctx.clearRect(0, 0, cols, rows)` で使用領域を消去してから `sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = 'high'`; `sctx.drawImage(base, gx0, gy0, gx1 - gx0, gy1 - gy0, 0, 0, cols, rows)`(clearRect は base に透過がある場合の前回描画の残留防止に必須)。**ソースは base 画像のみ** — 先に描かれたアノテーションはサンプルしない(Renderer.swift:201。pixelate の下の注釈は base のピクセレートで置き換わって見える)。
 5. **拡大(ブロック復元)**: `ctx.save(); ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.width, rect.height); ctx.clip(); ctx.imageSmoothingEnabled = false; ctx.drawImage(small, 0, 0, cols, rows, gx0, gy0, cols * blockSize, rows * blockSize); ctx.restore()`。クリップにより rect 外へはみ出さない。端の部分ブロックは端の平均値が伸びる(CIPixellate の `clampedToExtent` 相当の不透明エッジ)。
 
 CIImage の y-flip 変換(Renderer.swift:202-203)は不要 — 全て y-down で完結。ブロックの色は縮小 drawImage の補間結果であり CIPixellate と厳密一致しないため、テストは「ブロック内の全ピクセルが同一色」「グリッドがキャンバス固定」を検証する(色値の完全一致は求めない)。
@@ -292,6 +295,17 @@ export async function encode(
 
 - node プロジェクト側は `tests/render/**/*.browser.test.ts` を exclude。
 - browser テストは冒頭で `await document.fonts.load('bold 28px Inter')` を実行(フォント未ロードでの計測ブレ防止)。
+- **CI 更新(必須)**: 本ステップから CI の `vitest run` が chromium を要求する。02 の `kakico-web-ci.yml` は `npm ci` のみでブラウザ install が無いため、そのままでは browser プロジェクトが落ちる。`npm ci` の直後に以下を追加する(ブラウザ ~150 MB を毎 run ダウンロードしないよう `actions/cache` とセット):
+
+```yaml
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('kakico-web/package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+        # キャッシュヒット時はブラウザ再ダウンロードがスキップされ OS deps のみ入る
+```
 - ピクセル検証ヘルパーを `tests/render/helpers.ts` に用意: `samplePixel(canvas, x, y): [r,g,b,a]`(`getImageData`)、`pixelHash(canvas): string`、`solidBitmap(w, h, cssColor): Promise<ImageBitmap>`、`topRedBottomBlueBitmap(w, h)`。
 
 ## 定数・仕様表
@@ -353,6 +367,7 @@ export async function encode(
 | `wrapLines breaks over-wide words per character` | width 25(= 2 文字分)で `"abcdef"` → `["ab","cd","ef"]`、最低 1 文字/行 |
 | `wrapLines greedy fill` | width 100 で `"aa bb cc dd"`(各語 20 + 空白 10)→ 貪欲詰めの期待行 |
 | `dropped lines rule` | `(i+1)*lineHeight <= size.height + 0.5` の判定関数が境界値で正しい |
+| `wrapLines memoizes per (string, width, font)` | spy 付き measurer で同一入力を 2 回 → 2 回目は `measure` 呼出ゼロ; width か font を変えると再計測; `clearWrapCache()` 後も再計測 |
 
 ### `tests/render/flatten.browser.test.ts`(browser mode)
 
@@ -394,6 +409,7 @@ export async function encode(
 | `pixelate falls back to gray for degenerate rect` | width 1 の rect → グレー塗り |
 | `pixelate stays inside rect` | rect 外 1px は base 色のまま(クリップ検証) |
 | `pixelate samples base only` | pixelate の下に赤 rect を重ねる → pixelate 領域は base 由来の色(赤が透けない) |
+| `pixelate scratch canvas has no stale pixels` | 透過 base で大きい rect → 小さい rect の順に描画 → 2 回目の出力に 1 回目の残像が混入しない(clearRect 回帰ガード) |
 
 ### `tests/render/encode.browser.test.ts`
 

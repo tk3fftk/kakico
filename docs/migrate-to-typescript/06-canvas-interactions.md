@@ -360,7 +360,14 @@ export class TextEditorOverlay {
 4. AntsScheduler の start/stop を crop の有無で切替。
 5. `selection` が要素に解決すれば `drawSelection(...)`。
 
-フラットキャッシュのキーは 05 と同じ `documentVersion` + crop 除去 document の値比較(クロップ矩形ドラッグは version を進めるが内容不変なので再フラットしない、`CanvasView.swift:248-262`)。
+**レイヤの内容分担(01 §レンダリングの確定仕様)**: Layer A = base 画像 + pixelate 要素のみ(host が「pixelate 以外の要素を除き `crop: null` にした doc コピー」を `flatten()` に渡す)。Layer B = pixelate 以外の全要素(同様に「pixelate を除いた doc コピー」を `render()` に渡す)。renderer 側の変更は不要 — フィルタは doc コピーで行う。
+
+**フラットキャッシュ(Layer A)の無効化規則 — 確定仕様。`documentVersion` 単独をキーにしない**:
+
+1. **ドラッグ中(`dragDisplayInfo != null`)は Layer A を凍結** — キャッシュキーの評価自体をスキップし、再 flatten しない。`documentVersion` は移動・リサイズの**毎 pointermove で +1** される(05 §3)ため、これをそのまま無効化キーにすると 4K 画像でドラッグの毎フレームに OffscreenCanvas 新規確保 + ベース画像全面 drawImage が走る(フレーム落ち + GC 圧)。ドラッグ中の要素表示は Layer B のライブ vector 描画が担う。
+2. 再 flatten のタイミングは **`commitInteraction`(pointerup)後の最初のフレーム**、および undo / redo / applyCrop / loadImage / テキスト commit / 色・線幅確定などの非ドラッグ経路の変化時のみ。キャッシュキーは(pixelate 要素配列の値比較, `baseBitmap` 参照)。
+3. クロップ矩形のドラッグは version を進めるが Layer A 内容(base + pixelate)は不変 — キー比較により再フラットしない(`CanvasView.swift:248-262` と同じ帰結)。
+4. **pixelate 要素のドラッグ**だけは例外扱い: ドラッグ開始時(`beginInteraction`)に「当該 pixelate を除いた」Layer A を 1 回だけ再 flatten して凍結し、ドラッグ中は Layer B が当該 pixelate を `drawPixelate` でライブ描画する(base bitmap は Layer B からも参照可)。pointerup で通常の再 flatten に戻る。ドラッグ中の再 flatten は 1 要素あたり開始時の 1 回のみ。
 
 ### 9. store アクション確認
 
@@ -438,6 +445,7 @@ CI ゲート:
 - [ ] クロップ表示中に Esc → 枠が消える(⌘Z で戻る)。クロップなしで Esc → 選択が解除される。
 - [ ] Backspace / Delete → 選択要素が削除される。テキスト編集中の Backspace は文字削除のみ(要素は消えない)。
 - [ ] exportBounds = expandToFit で矢印を画像端の外へドラッグ → ドラッグ中はカーソルと要素が 1:1 で追従し(暴走なし)、up した瞬間にキャンバスが成長分を含めて再フィットする。
+- [ ] 4K 級の画像を開いて要素を連続ドラッグ → DevTools Performance で記録し、ドラッグ中に `flatten`(OffscreenCanvas 確保 + 全面 drawImage)が毎フレーム走っていないこと(再 flatten は pointerup 後の 1 回のみ)。
 - [ ] トラックパッドでピンチ(または Chrome で Ctrl+ホイール) → **カーソル直下の画像点が固定**されたままズーム。400% 超・フロア未満にはならない。ズーム % 表示が連続値で追従する。
 - [ ] 100% 超で 2 本指スクロール → 画像が指に追従してパンし、端が viewport 内側に入らない。fit モードではスクロールしても動かない。注釈ドラッグの最中はパン・ズームとも効かない。
 - [ ] ピンチ中にテキスト編集が開いていた → ズーム開始時点でコミットされる。パン中は textarea が要素に張り付いたまま動く。

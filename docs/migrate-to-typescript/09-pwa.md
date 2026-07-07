@@ -20,10 +20,11 @@ kakico-web を「インストール可能・完全オフライン動作・OS フ
 
 | パス | 種別 | 内容 |
 |---|---|---|
-| `vite.config.ts` | 変更 | manifest 完成(`launch_handler`/`file_handlers` 追加)、SW 登録有効化、workbox 設定確定 |
+| `vite.config.ts` | 変更 | manifest 完成(`launch_handler`/`file_handlers` 追加)、SW 登録有効化(`registerType: 'prompt'`)、workbox 設定確定 |
+| `index.html` | 変更 | CSP meta タグ追加(手順 11) |
 | `playwright.config.ts` | 新規 | e2e 設定(preview サーバー + chromium) |
 | `package.json` | 変更 | `@playwright/test` devDep 追加、`preview`/`e2e` scripts |
-| `src/platform/swUpdate.ts` | 新規 | SW 登録 + 更新検知(controllerchange)+ 定期 update ポーリング |
+| `src/platform/swUpdate.ts` | 新規 | SW 登録 + 更新検知(`onNeedRefresh`)+ `reloadToUpdate()` + 定期 update ポーリング + 登録失敗の可視化 |
 | `src/platform/installPrompt.ts` | 新規 | `beforeinstallprompt` 捕捉と `prompt()` 実行 |
 | `src/platform/files.ts` | 変更 | `routeLaunchFile()` と `consumeLaunchQueue()` 追加 |
 | `src/state/canvasStore.ts` | 変更 | `updateAvailable` / `canInstall` フィールドとアクション追加 |
@@ -49,7 +50,12 @@ kakico-web を「インストール可能・完全オフライン動作・OS フ
 
 ```ts
 VitePWA({
-  registerType: 'autoUpdate',
+  // 'prompt': 新 SW は Reload まで waiting に留まり、旧 precache を保持する。
+  // 'autoUpdate'(skipWaiting + clientsClaim + cleanupOutdatedCaches)は新 SW activate 時に
+  // 旧 precache を即削除するため、表示中の旧ページが動的 import(遅延チャンク)を要求した瞬間に
+  // 旧ハッシュが消えており navigateFallback が HTML を返してチャンクロードが壊れる。
+  // 「トースト + 手動 Reload」の UX には prompt が正。
+  registerType: 'prompt',
   manifest: {
     name: 'Kakico',
     short_name: 'Kakico',
@@ -98,40 +104,46 @@ VitePWA({
 
 ### 2. SW ライフサイクルと更新フロー(`src/platform/swUpdate.ts`)
 
-方針(binding): `registerType: 'autoUpdate'` により新 SW は `skipWaiting` + `clientsClaim` で即時アクティブ化されるが、**ページの自動リロードはしない**(未コミットの注釈を破壊しないため — `dirty` ガードとの整合)。新 SW がコントロールを奪った時点で永続トースト「Reload to update」を表示し、ユーザー操作の Reload で新アセットに切り替える。
+方針(binding): `registerType: 'prompt'` により新 SW は install 後 **waiting に留まり**、旧 precache は削除されない。表示中の旧ページは動的 import(遅延チャンク)を含め旧アセット一式で動き続ける — 混在なし・チャンク破壊なし。永続トースト「Reload to update」を表示し、ユーザー操作の Reload で `updateSW(true)`(skipWaiting → activate → reload)により新アセットへ一括切替する。`cleanupOutdatedCaches` による旧 precache 削除は新 SW activate 時 = Reload 時に起きる。
 
 ライフサイクル全文:
 
-1. 初回訪問: SW install → precache(アプリシェル全ファイル)→ activate → `clientsClaim`。以後オフライン動作可。`onOfflineReady` で通常トースト表示。
-2. デプロイ後の再訪問: ブラウザが新 SW を検出 → install(新 precache manifest を差分ダウンロード)→ `skipWaiting` で即 activate → `controllerchange` 発火 → `onUpdateAvailable` コールバック → store の `updateAvailable = true` → `UpdateToast` 表示。表示中のページは旧アセットのまま動き続ける(混在なし)。
+1. 初回訪問: SW install → precache(アプリシェル全ファイル)→ activate。以後オフライン動作可。`onOfflineReady` で通常トースト表示。
+2. デプロイ後の再訪問: ブラウザが新 SW を検出 → install(新 precache manifest を差分ダウンロード)→ **waiting のまま停止** → `onNeedRefresh` コールバック → store の `updateAvailable = true` → `UpdateToast` 表示。表示中のページは旧 SW + 旧 precache のまま動き続ける。
 3. タブを開いたまま長時間経過: 60 分間隔の `registration.update()` ポーリングで新 SW を検出(以降は 2 と同じ)。
-4. Reload ボタン → `location.reload()`。`dirty` 時は 08 の `beforeunload` ガードが先に確認を出す。IndexedDB オートセーブ(08)がリロード後の復元を担う。
+4. Reload ボタン → `reloadToUpdate()`(内部で `updateSW(true)`: waiting SW に skipWaiting をポストし、activate 後にページをリロード)。`dirty` 時は 08 の `beforeunload` ガードが先に確認を出す。IndexedDB オートセーブ(08)がリロード後の復元を担う。
+5. SW 登録そのものが失敗した場合(HTTPS 要件・ホスティング設定ミス等)は `onRegisterError` → `flashToast('Offline mode unavailable')` + `logError('sw-register-failed', e)`(08 の errorLog)。オフライン機能の沈黙死を運用可視化する。
 
 ```ts
 // src/platform/swUpdate.ts
 export interface SWUpdateCallbacks {
   onOfflineReady(): void;      // 初回 precache 完了
-  onUpdateAvailable(): void;   // 新 SW がコントロール取得(リロードで新アセット)
+  onUpdateAvailable(): void;   // 新 SW が waiting に入った(Reload で新アセット)
+  onRegisterError(e: unknown): void;
 }
 
 export const SW_UPDATE_POLL_MS = 60 * 60 * 1000; // 60 min
 
+let updateFn: (() => void) | null = null;
+
+/** UpdateToast の Reload ボタンが呼ぶ。waiting SW を activate してリロード。
+ *  registerSW 前に呼ばれた場合のフォールバックは location.reload()。 */
+export function reloadToUpdate(): void { (updateFn ?? (() => location.reload()))(); }
+
 export function registerServiceWorker(cb: SWUpdateCallbacks): void {
   if (!('serviceWorker' in navigator)) return;
-  // 初回インストール時の controllerchange(controller: null → SW)は更新ではない
-  const hadController = navigator.serviceWorker.controller != null;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (hadController) cb.onUpdateAvailable();
-  });
   // virtual:pwa-register は vite-plugin-pwa が生成(dev では no-op)
   import('virtual:pwa-register').then(({ registerSW }) => {
-    registerSW({
+    const updateSW = registerSW({
       immediate: true,
+      onNeedRefresh: cb.onUpdateAvailable,   // 'prompt' モード: 新 SW が waiting に入った
       onOfflineReady: cb.onOfflineReady,
       onRegisteredSW(_url, registration) {
         if (registration) setInterval(() => void registration.update(), SW_UPDATE_POLL_MS);
       },
+      onRegisterError: cb.onRegisterError,
     });
+    updateFn = () => void updateSW(true);
   });
 }
 ```
@@ -223,6 +235,7 @@ bootstrap 末尾(store 生成・Preact マウント後)に追加:
 registerServiceWorker({
   onOfflineReady: () => store.flashToast('Ready to work offline'),
   onUpdateAvailable: () => store.setUpdateAvailable(),
+  onRegisterError: (e) => { store.flashToast('Offline mode unavailable'); logError('sw-register-failed', e); },
 });
 initInstallPrompt((v) => store.setCanInstall(v));
 consumeLaunchQueue({ openKakico, openImage }); // 08/05 の経路を束ねたもの
@@ -231,7 +244,7 @@ consumeLaunchQueue({ openKakico, openImage }); // 08/05 の経路を束ねたも
 `UpdateToast.tsx` の仕様:
 
 - 表示条件 `updateAvailable === true`。既存 `Toast.tsx` と同じ bottom-center capsule チェーンだが、**自動消滅なし・`pointer-events: auto`**(通常トーストの 1.8 s / `pointer-events: none` 仕様からの意図的逸脱)。
-- 文言: `Reload to update` + ボタン `Reload`(クリックで `location.reload()`)。
+- 文言: `Reload to update` + ボタン `Reload`(クリックで `reloadToUpdate()` — §2。素の `location.reload()` ではない: waiting SW を activate しないと新アセットに切り替わらない)。
 - `role="status"` `aria-live="polite"`。
 - 通常トーストと同時表示になる場合は UpdateToast を上に積む(縦スタック、gap 8px)。
 
@@ -299,11 +312,13 @@ export default defineConfig({
   timeout: 30_000,
   use: { baseURL: 'http://localhost:4173' },
   webServer: {
-    // SW は本番ビルド + preview でのみ動く(dev では devOptions 無効のため)
-    command: 'npm run build && npm run preview -- --port 4173 --strictPort',
+    // SW は本番ビルド + preview でのみ動く(dev では devOptions 無効のため)。
+    // build は webServer で行わない — ビルド失敗が e2e の flake(120s タイムアウト)として
+    // 現れるのを防ぐため、ビルドは前段の明示ステップで行い preview は dist を指すだけにする。
+    command: 'npm run preview -- --port 4173 --strictPort',
     url: 'http://localhost:4173',
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 30_000,
   },
   projects: [
     {
@@ -317,9 +332,14 @@ export default defineConfig({
 });
 ```
 
+`package.json` の `e2e` script は build を前置する: `"e2e": "npm run build && playwright test"`(CI では build 済み dist を再利用するため `npx playwright test` を直接呼ぶ)。
+
 vitest が `tests/e2e/*.spec.ts` を拾わないこと(02 の include は `*.test.ts(x)` のみだが、明示的に `exclude: ['tests/e2e/**']` を `vite.config.ts` の `test` に追加)。
 
-`tests/e2e/smoke.spec.ts` のテストケースは §テスト参照。CI へは `npx playwright install --with-deps chromium` の後に `npm run e2e` を追加する(既存 `kakico-web-ci.yml` に job 追記。ゲートに含める)。
+`tests/e2e/smoke.spec.ts` のテストケースは §テスト参照。CI(既存 `kakico-web-ci.yml`)への追記:
+
+- Playwright ブラウザは 04 で導入済みの `actions/cache`(`~/.cache/ms-playwright`、key = lockfile ハッシュ)をそのまま使う。`npx playwright install --with-deps chromium` はキャッシュヒット時にブラウザ再ダウンロード(~150 MB)をスキップする。**毎 run のフル DL を CI に入れないこと。**
+- 既存の `npm run build` ステップの後に `npx playwright test` を追加する(build は共有し二重ビルドしない)。ゲートに含める。
 
 ### 10. オフライン検証手順(手動)
 
@@ -329,6 +349,30 @@ vitest が `tests/e2e/*.spec.ts` を拾わないこと(02 の include は `*.tes
 4. オフラインのまま画像をドラッグイン → 注釈 → PNG エクスポート(ダウンロードフォールバック)まで通ること(全処理がクライアントサイドである確認)。
 5. Chrome でインストール(omnibox アイコン)→ Wi-Fi を OS レベルで切断 → インストール済みアプリを再起動 → 起動して操作可能。
 6. `.kakico` ファイルを Finder でダブルクリック(初回は「Kakico で開く」許可)→ アプリがフォーカスされドキュメントが復元される。
+
+### 11. ホスティング要件 — Cache-Control / CSP(デプロイ仕様)
+
+計画にホスティング手順が無いままだと、静的ホスト既定の長期キャッシュで `sw.js` がキャッシュされた瞬間に**新 SW が永久に検出されず更新機構ごと本番で死ぬ**。デプロイ先(任意の静的ホスト)には以下の HTTP ヘッダ設定を必須要件として課す。ホスト選定時にこの表を設定できることを確認する(Cloudflare Pages / Netlify / GitHub Pages + CDN いずれも可)。
+
+| パス | Cache-Control | 理由 |
+|---|---|---|
+| `/sw.js` | `no-cache`(毎回再検証) | これがキャッシュされると `registration.update()` が新 SW を検出できない |
+| `/index.html`(`navigateFallback` 含む) | `no-cache` | 新 precache manifest への入口 |
+| `/manifest.webmanifest` | `no-cache` | file_handlers / アイコン更新の反映 |
+| `/assets/*`(ハッシュ付き JS/CSS) | `public, max-age=31536000, immutable` | 内容 = ハッシュで不変 |
+| `/fonts/*`, `/icons/*`(ハッシュなし public 資産) | `public, max-age=86400` | 差し替え頻度が低い。即時反映が要るなら短縮 |
+
+CSP: `index.html` の `<head>` に meta タグで宣言する(02 で作成した `index.html` を本ステップで変更):
+
+```html
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'">
+```
+
+- `style-src 'unsafe-inline'` は Vite / Preact のインライン style 属性に必要(nonce 化はスコープ外)。
+- `img-src blob: data:` は ImageBitmap / objectURL / drag-out 経路に必要。
+- `frame-ancestors` は **meta CSP では無効**。クリックジャッキング対策が必要ならホスティング側ヘッダで `frame-ancestors 'none'`(または `X-Frame-Options: DENY`)を併せて配る。
+- ホスティング側でヘッダ CSP を設定できる場合は同内容をヘッダで配る方が強い(meta は先行して読み込まれたリソースを守れない)が、meta を最低ラインとしてリポジトリに固定する。
 
 ## 定数・仕様表
 
@@ -341,7 +385,7 @@ vitest が `tests/e2e/*.spec.ts` を拾わないこと(02 の include は `*.tes
 | icons | 192×192 / 512×512 PNG、`purpose: any maskable` | アーキテクチャ仕様 §8(02 で生成済み) |
 | `launch_handler.client_mode` | `focus-existing` | アーキテクチャ仕様 §8(シングルウィンドウ = Mac 版 `applicationShouldTerminateAfterLastWindowClosed` の単一窓モデル対応) |
 | `file_handlers` 受理 | `.kakico`(`application/x-kakico`)、`.png`/`.jpg`/`.jpeg`/`.webp` | アーキテクチャ仕様 §8; Mac 版 Resources/Info.plist:29-51(`public.image` + 拡張子 `kakico` の CFBundleDocumentTypes に相当) |
-| `registerType` | `autoUpdate` | アーキテクチャ仕様 §8 |
+| `registerType` | `prompt`(新 SW は Reload まで waiting・旧 precache 保持。autoUpdate は表示中ページの遅延チャンクを破壊するため不採用) | アーキテクチャ仕様 §8(本レビューで autoUpdate から変更) |
 | SW キャッシュ方針 | アプリシェル全プリキャッシュ、runtimeCaching なし、ユーザーデータ非キャッシュ | アーキテクチャ仕様 §8 |
 | SW update ポーリング | `SW_UPDATE_POLL_MS = 3_600_000`(60 min) | web 新規定数(Swift 対応物なし) |
 | offline-ready トースト文言 | `Ready to work offline`(1.8 s 自動消滅) | トースト機構は Sources/Kakico/CanvasController.swift:63(1.8 s) |
@@ -350,6 +394,9 @@ vitest が `tests/e2e/*.spec.ts` を拾わないこと(02 の include は `*.tes
 | トーストアニメーション | `.easeOut 0.18s`、y offset 8、bottom pad 24;Reduce Motion 時 opacity のみ | Sources/Kakico/UI.swift:78-83 |
 | マーチングアンツ | `setLineDash([5,4])`、~12 Hz 位相;reduced-motion 時は位相 0 固定 | Sources/Kakico/CanvasView.swift(drawCropOverlay);アーキテクチャ仕様 §6 |
 | launchQueue ルーティング | `/\.kakico$/i` → kakico、他 → image | web 新規(Mac 版 doc-type 宣言の等価物) |
+| Cache-Control | `sw.js` / `index.html` / `manifest` = `no-cache`、ハッシュ付きアセット = `immutable` 長期(手順 11 の表) | web 新規(デプロイ必須要件) |
+| CSP | `index.html` meta(`script-src 'self'`、`object-src 'none'`、`base-uri 'none'` ほか手順 11) | web 新規 |
+| SW 登録失敗時 | トースト `Offline mode unavailable` + `logError('sw-register-failed')` | web 新規(08 errorLog) |
 | 置換確認文言(launchQueue 経由でも同一) | "Replace the current image?" / "Pasting will replace the image you are editing. Unsaved annotations will be lost." / "Replace" | Sources/Kakico/ExportService.swift:93-95 |
 | `share_target` | v1 では追加しない | アーキテクチャ仕様 §8 |
 
@@ -359,8 +406,10 @@ vitest が `tests/e2e/*.spec.ts` を拾わないこと(02 の include は `*.tes
 - [ ] `npm run build` が exit 0 で、SW と manifest が出力される: `test -f dist/sw.js && test -f dist/manifest.webmanifest`
 - [ ] manifest 内容: `grep -q 'focus-existing' dist/manifest.webmanifest && grep -q 'file_handlers' dist/manifest.webmanifest && grep -q '.kakico' dist/manifest.webmanifest && grep -q 'any maskable' dist/manifest.webmanifest`
 - [ ] precache にフォントが含まれる: `grep -q 'woff2' dist/sw.js`
+- [ ] precache の取りこぼしなし: `[ -z "$(find dist -type f -size +5M)" ]`(`maximumFileSizeToCacheInBytes` 超のアセットは**無警告で** precache から除外され、当該ファイルだけオフラインで欠落するため、上限超の emit asset が存在しないことをビルド後にアサートする)
+- [ ] CSP meta が配信物に含まれる: `grep -q 'Content-Security-Policy' dist/index.html`
 - [ ] SW がユーザーデータをキャッシュしない: `! grep -q 'runtimeCaching' vite.config.ts`(runtimeCaching 定義が存在しないこと)
-- [ ] `npx playwright install --with-deps chromium && npm run e2e` が exit 0(§テストの e2e 5 ケース全 pass)。
+- [ ] `npx playwright install --with-deps chromium && npm run e2e` が exit 0(§テストの e2e 5 ケース全 pass。CI では build 済み dist に対し `npx playwright test`)。
 - [ ] Lighthouse PWA カテゴリ pass(PWA カテゴリは Lighthouse 12 で削除済みのため v11 を明示指定):
       `npm run preview -- --port 4173 &` の後
       `npx lighthouse@11 http://localhost:4173 --only-categories=pwa --chrome-flags="--headless=new" --output=json --output-path=$TMPDIR/lh.json`
@@ -385,7 +434,7 @@ vitest が `tests/e2e/*.spec.ts` を拾わないこと(02 の include は `*.tes
 | 〃 | `setCanInstall round-trips` | `true` → `false` の往復が snapshot に反映 |
 | 〃 | `pwa flags are not part of undo` | `setUpdateAvailable()` 後に `undo()` してもフラグ不変、document 不変 |
 | `tests/ui/UpdateToast.test.tsx` | `hidden when no update` | `updateAvailable: false` で DOM に出ない |
-| 〃 | `renders and reloads on click` | `updateAvailable: true` で `role="status"` 要素(文言 `Reload to update`)と `Reload` ボタンが出現、click で注入した `reload` spy が 1 回呼ばれる(`location.reload` は DI で差し替え) |
+| 〃 | `renders and reloads on click` | `updateAvailable: true` で `role="status"` 要素(文言 `Reload to update`)と `Reload` ボタンが出現、click で注入した `reloadToUpdate` spy が 1 回呼ばれる(swUpdate の関数は DI で差し替え) |
 | `tests/engine/cropOverlay.test.ts`(新規) | `marching ants freeze under reduced motion` | `prefersReducedMotion: () => true` 注入時、tick を複数回進めても `lineDashOffset === 0`;`false` 時は位相が進む |
 
 ### Playwright(`tests/e2e/smoke.spec.ts`)
