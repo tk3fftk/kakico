@@ -23,8 +23,18 @@ cp "$BIN" "$APP/Contents/MacOS/Kakico"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
+# Optional release version stamp (VERSION env var or 2nd arg, "v" prefix tolerated).
+# Must happen before codesign: editing Info.plist afterwards breaks the seal.
+VERSION="${VERSION:-${2:-}}"
+if [[ -n "$VERSION" ]]; then
+    VERSION="${VERSION#v}"
+    echo "==> stamping version $VERSION"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
+fi
+
 echo "==> ad-hoc code signing"
-codesign --force --deep --sign - "$APP"
+codesign --force --sign - "$APP"
 
 echo "==> verifying"
 codesign --verify --verbose "$APP"
