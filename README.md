@@ -21,6 +21,16 @@ Open or paste an image, mark it up, and export:
 Screen capture is intentionally out of scope — feed it images from macOS's built-in
 Screenshot (⇧⌘4), Finder drag-drop, or paste.
 
+## Install
+
+```sh
+brew tap tk3fftk/tap
+brew install --cask kakico
+```
+
+Requires macOS 15+ on Apple Silicon. The app is ad-hoc signed (not notarized);
+the cask removes the quarantine attribute on install so it opens normally.
+
 ## Build & run
 
 ```sh
@@ -29,7 +39,7 @@ swift test                       # run unit tests (model + renderer)
 open build/Kakico.app
 ```
 
-Requirements: macOS 13+, Xcode/Swift toolchain. The build script produces a native
+Requirements: macOS 15+, Xcode/Swift toolchain. The build script produces a native
 arm64, ad-hoc-signed bundle (no Apple Developer account required).
 
 ## Architecture

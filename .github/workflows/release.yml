@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, release, and update tap
+    runs-on: macos-26
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Derive version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Build app bundle
+        run: VERSION="$VERSION" ./scripts/build-app.sh release
+
+      - name: Package zip
+        run: |
+          ditto -c -k --keepParent build/Kakico.app "Kakico-${VERSION}.zip"
+          echo "SHA256=$(shasum -a 256 "Kakico-${VERSION}.zip" | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Sanity-check zip round-trip
+        run: |
+          ditto -x -k "Kakico-${VERSION}.zip" /tmp/unzip-check
+          codesign --verify --verbose=2 /tmp/unzip-check/Kakico.app
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
+            /tmp/unzip-check/Kakico.app/Contents/Info.plist | grep -qx "$VERSION"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "Kakico-${VERSION}.zip" \
+            --verify-tag \
+            --title "Kakico ${GITHUB_REF_NAME}" \
+            --generate-notes
+
+      - name: Update Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/tk3fftk/homebrew-tap.git" tap
+          cd tap
+          sed -i '' -E "s|^  version \".*\"$|  version \"${VERSION}\"|" Casks/kakico.rb
+          sed -i '' -E "s|^  sha256 \".*\"$|  sha256 \"${SHA256}\"|" Casks/kakico.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "kakico ${VERSION}"
+          git push
