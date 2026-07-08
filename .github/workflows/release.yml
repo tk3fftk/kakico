@@ -42,17 +42,29 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
             /tmp/unzip-check/Kakico.app/Contents/Info.plist | grep -qx "$VERSION"
 
+      # Immutable releases are enabled on this repo: once published, assets and
+      # the tag are locked, so the asset must be attached while the release is
+      # still a draft. Publishing is the last, irreversible step — a deleted
+      # immutable release's tag name can never be reused; recover from a bad
+      # release with a new patch tag, not by re-tagging.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "release $GITHUB_REF_NAME already exists, skipping creation"
-          else
-            gh release create "$GITHUB_REF_NAME" "Kakico-${VERSION}.zip" \
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
               --verify-tag \
+              --draft \
               --title "Kakico ${GITHUB_REF_NAME}" \
               --generate-notes
+          fi
+          if [ "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = "true" ]; then
+            # Draft is still mutable: ensure the asset is attached (clobber
+            # replaces a partial upload from a failed run), then publish.
+            gh release upload "$GITHUB_REF_NAME" "Kakico-${VERSION}.zip" --clobber
+            gh release edit "$GITHUB_REF_NAME" --draft=false
+          else
+            echo "release $GITHUB_REF_NAME already published, skipping"
           fi
 
       # The cask sha256 must match the published asset, not the local build:
