@@ -18,16 +18,16 @@ struct KakicoApp: App {
 
     var body: some Scene {
         Window("Kakico", id: "main") {
-            ContentView(controller: appDelegate.controller)
+            ContentView(workspace: appDelegate.workspace)
                 .frame(minWidth: 720, minHeight: 520)
         }
-        .commands { AppCommands(controller: appDelegate.controller) }
+        .commands { AppCommands(workspace: appDelegate.workspace) }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let controller = CanvasController()
+    let workspace = WorkspaceController()
     private var pasteKeyMonitor: Any?
     private var copyKeyMonitor: Any?
     private var toolKeyMonitor: Any?
@@ -38,10 +38,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard controller.hasDocument else { return .terminateNow }
+        let openCount = workspace.openDocumentCount
+        guard openCount > 0 else { return .terminateNow }
+        let info = openCount == 1
+            ? "Quitting will discard the image you are editing. Unsaved annotations will be lost."
+            : "Quitting will discard the \(openCount) images you are editing. Unsaved annotations will be lost."
         if ExportService.confirmDiscard(
             message: "Quit Kakico?",
-            info: "Quitting will discard the image you are editing. Unsaved annotations will be lost.",
+            info: info,
             confirmTitle: "Quit"
         ) { return .terminateNow }
         // Safety net: if a close path ever slipped past the windowShouldClose
@@ -71,15 +75,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // SwiftUI's bridged Edit ▸ Paste item swallows ⌘V without dispatching
         // paste: down the AppKit responder chain, so intercept the key event
         // before menu dispatch instead.
-        pasteKeyMonitor = commandKeyMonitor(for: "v") { [controller] in
-            DispatchQueue.main.async { ExportService.confirmAndPasteImage(controller) }
+        pasteKeyMonitor = commandKeyMonitor(for: "v") { [workspace] in
+            DispatchQueue.main.async { ExportService.confirmAndPasteImage(workspace.active) }
             return true
         }
 
         // Plain ⌘C copies the flattened image when nothing is selected; it
         // passes through while an annotation is selected, so future element
         // copy keeps working.
-        copyKeyMonitor = commandKeyMonitor(for: "c") { [controller] in
+        copyKeyMonitor = commandKeyMonitor(for: "c") { [workspace] in
+            let controller = workspace.active
             guard controller.hasDocument, controller.selection == nil else { return false }
             ExportService.copyToClipboard(controller)
             return true
@@ -94,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                   let index = Int(chars),
                   Tool.allCases.indices.contains(index),
                   !(NSApp.keyWindow?.firstResponder is NSTextView) else { return event }
-            self.controller.tool = Tool.allCases[index]
+            self.workspace.active.tool = Tool.allCases[index]
             return nil
         }
 
@@ -197,49 +202,57 @@ private class EditMenuFilter: NSObject, NSMenuDelegate {
 }
 
 struct AppCommands: Commands {
-    var controller: CanvasController
+    var workspace: WorkspaceController
 
     var body: some Commands {
+        // Reading `active` here keeps the disabled(...) states below reactive
+        // to tab switches. Actions deliberately re-resolve `workspace.active`
+        // at click time instead of capturing this snapshot, so a command can
+        // never target a stale tab.
+        let controller = workspace.active
         CommandGroup(replacing: .newItem) {
-            Button("Open Image…") { ExportService.openPanel(controller) }
+            Button("New Tab") { workspace.newTab() }
+                .keyboardShortcut("t", modifiers: .command)
+            Divider()
+            Button("Open Image…") { ExportService.openPanel(workspace.active) }
                 .keyboardShortcut("o", modifiers: .command)
-            Button("Open Kakico Document…") { ExportService.openDocument(controller) }
+            Button("Open Kakico Document…") { ExportService.openDocument(workspace.active) }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             // ⇧⌘V kept as an explicit alias; plain ⌘V is handled by the key
             // monitor in AppDelegate so it still reaches inline text editors.
-            Button("Paste Image") { ExportService.confirmAndPasteImage(controller) }
+            Button("Paste Image") { ExportService.confirmAndPasteImage(workspace.active) }
                 .keyboardShortcut("v", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .saveItem) {
             // Replacing .saveItem removes the system Close item with it, so
-            // provide our own; performClose: routes through windowShouldClose
-            // and the quit confirmation like the red close button.
-            Button("Close") { NSApp.sendAction(#selector(NSWindow.performClose(_:)), to: nil, from: nil) }
+            // provide our own. Closing the last tab routes to NSApp.terminate
+            // and the quit confirmation, like the red close button.
+            Button("Close Tab") { workspace.closeActiveTab() }
                 .keyboardShortcut("w", modifiers: .command)
             Divider()
-            Button("Save Kakico Document…") { ExportService.saveDocument(controller) }
+            Button("Save Kakico Document…") { ExportService.saveDocument(workspace.active) }
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(!controller.hasDocument)
-            Button("Export Image…") { ExportService.exportPanel(controller) }
+            Button("Export Image…") { ExportService.exportPanel(workspace.active) }
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(!controller.hasDocument)
-            Button("Copy Image to Clipboard") { ExportService.copyToClipboard(controller) }
+            Button("Copy Image to Clipboard") { ExportService.copyToClipboard(workspace.active) }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(!controller.hasDocument)
             Divider()
             Picker("Export Bounds", selection: Binding(
-                get: { controller.exportBounds },
-                set: { controller.exportBounds = $0 }
+                get: { workspace.active.exportBounds },
+                set: { workspace.active.exportBounds = $0 }
             )) {
                 Text("Expand to Fit Annotations").tag(ExportBounds.expandToFit)
                 Text("Clip at Image Boundary").tag(ExportBounds.clipToImage)
             }
         }
         CommandGroup(replacing: .undoRedo) {
-            Button("Undo") { controller.undo() }
+            Button("Undo") { workspace.active.undo() }
                 .keyboardShortcut("z", modifiers: .command)
                 .disabled(!controller.canUndo)
-            Button("Redo") { controller.redo() }
+            Button("Redo") { workspace.active.redo() }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!controller.canRedo)
         }
@@ -247,13 +260,13 @@ struct AppCommands: Commands {
         // digit tool shortcuts — AppDelegate's key monitor skips ⌘-modified keys.
         CommandGroup(after: .sidebar) {
             Divider()
-            Button("Zoom In") { controller.zoomIn() }
+            Button("Zoom In") { workspace.active.zoomIn() }
                 .keyboardShortcut("+", modifiers: .command)
                 .disabled(!controller.hasDocument)
-            Button("Zoom Out") { controller.zoomOut() }
+            Button("Zoom Out") { workspace.active.zoomOut() }
                 .keyboardShortcut("-", modifiers: .command)
                 .disabled(!controller.hasDocument)
-            Button("Fit to Window") { controller.zoomToFit() }
+            Button("Fit to Window") { workspace.active.zoomToFit() }
                 .keyboardShortcut("0", modifiers: .command)
                 .disabled(!controller.hasDocument)
         }
@@ -262,7 +275,7 @@ struct AppCommands: Commands {
             // text editor, so disable them while it is active. The legacy 0-7
             // digit shortcuts are handled by the key monitor in AppDelegate.
             ForEach(Tool.allCases) { tool in
-                Button(tool.label) { controller.tool = tool }
+                Button(tool.label) { workspace.active.tool = tool }
                     .keyboardShortcut(KeyEquivalent(tool.shortcutKey), modifiers: [])
                     .disabled(controller.isEditingText)
             }
