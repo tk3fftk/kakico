@@ -79,6 +79,12 @@ enum ExportService {
         return alert.runModal() == .alertFirstButtonReturn
     }
 
+    /// Ends any in-progress inline text editing by resigning the first
+    /// responder (fires textDidEndEditing → commitTextEditing).
+    static func commitPendingTextEditing() {
+        NSApp.keyWindow?.makeFirstResponder(nil)
+    }
+
     /// Pastes an image from the clipboard, asking for confirmation first when a
     /// document is already open. Returns true if a new image was loaded.
     @discardableResult
@@ -95,9 +101,9 @@ enum ExportService {
                 confirmTitle: "Replace"
             ) else { return false }
         }
-        // End any in-progress inline text editing (fires textDidEndEditing →
-        // commitTextEditing) so the editor doesn't linger over the new document.
-        NSApp.keyWindow?.makeFirstResponder(nil)
+        // Commit inline text editing so the editor doesn't linger over the
+        // new document.
+        commitPendingTextEditing()
         return controller.pasteImage()
     }
 

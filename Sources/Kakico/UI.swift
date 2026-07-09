@@ -78,6 +78,16 @@ private struct TabItem: View {
     @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
 
+    private var backgroundColor: Color {
+        if isActive {
+            MiroTheme.board(scheme)
+        } else if hovering {
+            Color.miroSurfacePressed.opacity(scheme == .dark ? 0.3 : 1)
+        } else {
+            .clear
+        }
+    }
+
     var body: some View {
         Text(title)
             .font(.miroCaption)
@@ -87,9 +97,7 @@ private struct TabItem: View {
                                       : MiroTheme.textSecondary(scheme))
             .padding(.horizontal, 28) // symmetric room for the close button
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(isActive ? MiroTheme.board(scheme)
-                        : hovering ? Color.miroSurfacePressed.opacity(scheme == .dark ? 0.3 : 1)
-                        : .clear)
+            .background(backgroundColor)
             .overlay(alignment: .leading) {
                 if hovering || isActive {
                     Button(action: close) {

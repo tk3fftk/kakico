@@ -37,7 +37,6 @@ final class WorkspaceController {
         active = first
     }
 
-    var anyDocumentOpen: Bool { tabs.contains { $0.hasDocument } }
     var openDocumentCount: Int { tabs.count { $0.hasDocument } }
 
     static func title(for controller: CanvasController) -> String {
@@ -52,21 +51,20 @@ final class WorkspaceController {
 
     func activate(_ controller: CanvasController) {
         guard controller !== active, tabs.contains(where: { $0 === controller }) else { return }
-        // Commit any in-progress inline text editing (fires textDidEndEditing →
-        // commitTextEditing) before the outgoing tab's canvas view is torn down.
-        NSApp?.keyWindow?.makeFirstResponder(nil)
+        // Commit inline text editing before the outgoing tab's canvas view is
+        // torn down.
+        ExportService.commitPendingTextEditing()
         active = controller
     }
 
     /// Wrap-around adjacent-tab navigation (Safari's Show Next/Previous Tab).
-    func activateNextTab() {
-        guard tabs.count > 1, let index = tabs.firstIndex(where: { $0 === active }) else { return }
-        activate(tabs[(index + 1) % tabs.count])
-    }
+    func activateNextTab() { activateAdjacent(offset: 1) }
 
-    func activatePreviousTab() {
+    func activatePreviousTab() { activateAdjacent(offset: -1) }
+
+    private func activateAdjacent(offset: Int) {
         guard tabs.count > 1, let index = tabs.firstIndex(where: { $0 === active }) else { return }
-        activate(tabs[(index + tabs.count - 1) % tabs.count])
+        activate(tabs[(index + offset + tabs.count) % tabs.count])
     }
 
     func closeActiveTab() { close(active) }

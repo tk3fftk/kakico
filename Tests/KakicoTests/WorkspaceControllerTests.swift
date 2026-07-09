@@ -45,7 +45,6 @@ final class WorkspaceControllerTests: XCTestCase {
         let ws = Harness().workspace
         XCTAssertEqual(ws.tabs.count, 1)
         XCTAssertTrue(ws.active === ws.tabs[0])
-        XCTAssertFalse(ws.anyDocumentOpen)
         XCTAssertEqual(ws.openDocumentCount, 0)
     }
 
@@ -194,6 +193,5 @@ final class WorkspaceControllerTests: XCTestCase {
         ws.active.loadImage(makeImage())
         XCTAssertEqual(ws.tabs.count, 3)
         XCTAssertEqual(ws.openDocumentCount, 2)
-        XCTAssertTrue(ws.anyDocumentOpen)
     }
 }

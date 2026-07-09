@@ -205,11 +205,9 @@ struct AppCommands: Commands {
     var workspace: WorkspaceController
 
     var body: some Commands {
-        // Reading `active` here keeps the disabled(...) states below reactive
-        // to tab switches. Actions deliberately re-resolve `workspace.active`
-        // at click time instead of capturing this snapshot, so a command can
-        // never target a stale tab.
-        let controller = workspace.active
+        // Actions and disabled(...) states both read `workspace.active` in
+        // place, so commands always target the current tab and stay reactive
+        // to tab switches.
         CommandGroup(replacing: .newItem) {
             Button("New Tab") { workspace.newTab() }
                 .keyboardShortcut("t", modifiers: .command)
@@ -232,13 +230,13 @@ struct AppCommands: Commands {
             Divider()
             Button("Save Kakico Document…") { ExportService.saveDocument(workspace.active) }
                 .keyboardShortcut("s", modifiers: .command)
-                .disabled(!controller.hasDocument)
+                .disabled(!workspace.active.hasDocument)
             Button("Export Image…") { ExportService.exportPanel(workspace.active) }
                 .keyboardShortcut("e", modifiers: .command)
-                .disabled(!controller.hasDocument)
+                .disabled(!workspace.active.hasDocument)
             Button("Copy Image to Clipboard") { ExportService.copyToClipboard(workspace.active) }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
-                .disabled(!controller.hasDocument)
+                .disabled(!workspace.active.hasDocument)
             Divider()
             Picker("Export Bounds", selection: Binding(
                 get: { workspace.active.exportBounds },
@@ -251,10 +249,10 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .undoRedo) {
             Button("Undo") { workspace.active.undo() }
                 .keyboardShortcut("z", modifiers: .command)
-                .disabled(!controller.canUndo)
+                .disabled(!workspace.active.canUndo)
             Button("Redo") { workspace.active.redo() }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
-                .disabled(!controller.canRedo)
+                .disabled(!workspace.active.canRedo)
         }
         // Lands in the system View menu. ⌘0 doesn't collide with the legacy
         // digit tool shortcuts — AppDelegate's key monitor skips ⌘-modified keys.
@@ -262,13 +260,13 @@ struct AppCommands: Commands {
             Divider()
             Button("Zoom In") { workspace.active.zoomIn() }
                 .keyboardShortcut("+", modifiers: .command)
-                .disabled(!controller.hasDocument)
+                .disabled(!workspace.active.hasDocument)
             Button("Zoom Out") { workspace.active.zoomOut() }
                 .keyboardShortcut("-", modifiers: .command)
-                .disabled(!controller.hasDocument)
+                .disabled(!workspace.active.hasDocument)
             Button("Fit to Window") { workspace.active.zoomToFit() }
                 .keyboardShortcut("0", modifiers: .command)
-                .disabled(!controller.hasDocument)
+                .disabled(!workspace.active.hasDocument)
         }
         // Lands in the Window menu, where Safari keeps its tab navigation.
         CommandGroup(before: .windowArrangement) {
@@ -287,7 +285,7 @@ struct AppCommands: Commands {
             ForEach(Tool.allCases) { tool in
                 Button(tool.label) { workspace.active.tool = tool }
                     .keyboardShortcut(KeyEquivalent(tool.shortcutKey), modifiers: [])
-                    .disabled(controller.isEditingText)
+                    .disabled(workspace.active.isEditingText)
             }
         }
     }
