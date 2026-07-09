@@ -82,7 +82,7 @@ enum ExportService {
     /// Ends any in-progress inline text editing by resigning the first
     /// responder (fires textDidEndEditing → commitTextEditing).
     static func commitPendingTextEditing() {
-        NSApp.keyWindow?.makeFirstResponder(nil)
+        NSApp?.keyWindow?.makeFirstResponder(nil)
     }
 
     /// Pastes an image from the clipboard, asking for confirmation first when a
