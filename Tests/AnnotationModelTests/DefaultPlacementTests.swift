@@ -106,7 +106,8 @@ final class DefaultPlacementTests: XCTestCase {
     /// Both axes below the threshold (jitter on a plain click) counts as a click
     /// and gets the default size.
     func testTinyBoxBelowThresholdGetsDefaultSize() {
-        let result = Annotation.rectangle(ShapeElement(rect: CGRect(x: 50, y: 60, width: 2.9, height: 2.9))).applyingDefaultInitialSize(canvasSize: canvas)
+        let shape = ShapeElement(rect: CGRect(x: 50, y: 60, width: 2.9, height: 2.9))
+        let result = Annotation.rectangle(shape).applyingDefaultInitialSize(canvasSize: canvas)
         guard case .rectangle(let e) = result else { return XCTFail("kind changed") }
         XCTAssertEqual(e.rect.width, DefaultInitialSize.size.width, accuracy: acc)
         XCTAssertEqual(e.rect.height, DefaultInitialSize.size.height, accuracy: acc)
