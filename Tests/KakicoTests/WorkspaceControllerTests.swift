@@ -71,6 +71,42 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertTrue(ws.active === ws.tabs[0])
     }
 
+    // MARK: - Adjacent-tab navigation
+
+    func testActivateNextTabMovesRight() {
+        let ws = Harness().workspace
+        ws.newTab()
+        ws.newTab()
+        ws.activate(ws.tabs[1])
+        ws.activateNextTab()
+        XCTAssertTrue(ws.active === ws.tabs[2])
+    }
+
+    func testActivateNextTabWrapsToFirst() {
+        let ws = Harness().workspace
+        ws.newTab()
+        ws.newTab() // rightmost is active
+        ws.activateNextTab()
+        XCTAssertTrue(ws.active === ws.tabs[0])
+    }
+
+    func testActivatePreviousTabWrapsToLast() {
+        let ws = Harness().workspace
+        ws.newTab()
+        ws.newTab()
+        ws.activate(ws.tabs[0])
+        ws.activatePreviousTab()
+        XCTAssertTrue(ws.active === ws.tabs[2])
+    }
+
+    func testTabCycleWithSingleTabIsNoOp() {
+        let ws = Harness().workspace
+        ws.activateNextTab()
+        XCTAssertTrue(ws.active === ws.tabs[0])
+        ws.activatePreviousTab()
+        XCTAssertTrue(ws.active === ws.tabs[0])
+    }
+
     // MARK: - Close: confirmation
 
     func testCloseEmptyNonLastTabRemovesWithoutConfirm() {

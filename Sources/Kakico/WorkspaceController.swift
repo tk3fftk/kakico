@@ -58,6 +58,17 @@ final class WorkspaceController {
         active = controller
     }
 
+    /// Wrap-around adjacent-tab navigation (Safari's Show Next/Previous Tab).
+    func activateNextTab() {
+        guard tabs.count > 1, let index = tabs.firstIndex(where: { $0 === active }) else { return }
+        activate(tabs[(index + 1) % tabs.count])
+    }
+
+    func activatePreviousTab() {
+        guard tabs.count > 1, let index = tabs.firstIndex(where: { $0 === active }) else { return }
+        activate(tabs[(index + tabs.count - 1) % tabs.count])
+    }
+
     func closeActiveTab() { close(active) }
 
     func close(_ controller: CanvasController) {

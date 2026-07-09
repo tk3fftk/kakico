@@ -270,6 +270,16 @@ struct AppCommands: Commands {
                 .keyboardShortcut("0", modifiers: .command)
                 .disabled(!controller.hasDocument)
         }
+        // Lands in the Window menu, where Safari keeps its tab navigation.
+        CommandGroup(before: .windowArrangement) {
+            Button("Show Previous Tab") { workspace.activatePreviousTab() }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .disabled(workspace.tabs.count < 2)
+            Button("Show Next Tab") { workspace.activateNextTab() }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .disabled(workspace.tabs.count < 2)
+            Divider()
+        }
         CommandMenu("Tools") {
             // Unmodified letter equivalents would steal typing from the inline
             // text editor, so disable them while it is active. The legacy 0-7
