@@ -1,4 +1,5 @@
 import Foundation
+import AnnotationModel
 
 enum Tool: String, CaseIterable, Identifiable {
     case select
@@ -66,9 +67,24 @@ enum Tool: String, CaseIterable, Identifiable {
 }
 
 /// Tools remember their stroke width per group (Miro-style): arrows/lines
-/// share one width, shape outlines another, text its own.
+/// share one width, shape outlines another, text its own. The kind→group
+/// taxonomy is defined here, in `Tool.strokeWidthGroup` and
+/// `Annotation.strokeWidthGroup` below — keep the two switches in step.
 enum StrokeWidthGroup {
     case segment
     case shape
     case text
+}
+
+extension Annotation {
+    /// The stroke-width memory this element belongs to; mirrors
+    /// `Tool.strokeWidthGroup` on the element side.
+    var strokeWidthGroup: StrokeWidthGroup? {
+        switch self {
+        case .arrow, .line: return .segment
+        case .rectangle, .ellipse: return .shape
+        case .text: return .text
+        case .pixelate: return nil
+        }
+    }
 }

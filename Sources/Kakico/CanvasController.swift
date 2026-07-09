@@ -37,11 +37,17 @@ final class CanvasController {
     /// Per-group stroke width memory: each tool family keeps its own width so
     /// thick arrows don't force thick shape outlines. `strokeWidth` mirrors
     /// the active group's value.
-    private var groupWidths: [StrokeWidthGroup: CGFloat] = [
-        .segment: DefaultStrokeWidth.segmentReferenceWidth,
-        .shape: DefaultStrokeWidth.shapeReferenceWidth,
-        .text: DefaultStrokeWidth.segmentReferenceWidth,
-    ]
+    private var groupWidths = CanvasController.defaultGroupWidths(forCanvasSize: DefaultSizeScale.referenceCanvasSize)
+
+    /// The reference widths scaled and clamped to the canvas; at the reference
+    /// canvas size these are the reference widths themselves.
+    private static func defaultGroupWidths(forCanvasSize size: CGSize) -> [StrokeWidthGroup: CGFloat] {
+        [
+            .segment: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth, forCanvasSize: size),
+            .shape: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.shapeReferenceWidth, forCanvasSize: size),
+            .text: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth, forCanvasSize: size),
+        ]
+    }
     private static let exportBoundsKey = "exportBounds"
     var exportBounds: ExportBounds = {
         if let raw = UserDefaults.standard.string(forKey: CanvasController.exportBoundsKey),
@@ -120,11 +126,7 @@ final class CanvasController {
         document = Document(baseImage: ref, canvasSize: size)
         self.sourceURL = sourceURL
         selection = nil
-        groupWidths = [
-            .segment: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth, forCanvasSize: size),
-            .shape: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.shapeReferenceWidth, forCanvasSize: size),
-            .text: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth, forCanvasSize: size),
-        ]
+        groupWidths = Self.defaultGroupWidths(forCanvasSize: size)
         adoptStrokeWidthForTool()
         undoStack.removeAll()
         redoStack.removeAll()
@@ -232,14 +234,17 @@ final class CanvasController {
     /// element, not from the user).
     private func rememberStrokeWidth() {
         guard !isSyncing else { return }
-        let group: StrokeWidthGroup?
         if let sel = selection, let doc = document, let i = doc.index(of: sel) {
-            group = doc.elements[i].strokeWidthGroup ?? tool.strokeWidthGroup
+            rememberWidth(strokeWidth, for: doc.elements[i].strokeWidthGroup ?? tool.strokeWidthGroup)
         } else {
-            group = tool.strokeWidthGroup
+            rememberWidth(strokeWidth, for: tool.strokeWidthGroup)
         }
+    }
+
+    /// The single write path into `groupWidths`.
+    private func rememberWidth(_ width: CGFloat, for group: StrokeWidthGroup?) {
         guard let group else { return }
-        groupWidths[group] = strokeWidth
+        groupWidths[group] = width
     }
 
     /// Adopts the selected element's stroke width and color so the controls
@@ -256,7 +261,7 @@ final class CanvasController {
         } else if let width = element.strokeWidth, width != strokeWidth {
             strokeWidth = width
         }
-        if let group = element.strokeWidthGroup { groupWidths[group] = strokeWidth }
+        rememberWidth(strokeWidth, for: element.strokeWidthGroup)
         if let color = element.color, color != strokeColor { strokeColor = color }
     }
 
@@ -352,18 +357,5 @@ final class CanvasController {
     func cancelCrop() {
         guard document?.crop != nil else { return }
         perform { $0.crop = nil }
-    }
-}
-
-private extension Annotation {
-    /// The stroke-width memory this element belongs to; mirrors
-    /// `Tool.strokeWidthGroup` on the element side.
-    var strokeWidthGroup: StrokeWidthGroup? {
-        switch self {
-        case .arrow, .line: return .segment
-        case .rectangle, .ellipse: return .shape
-        case .text: return .text
-        case .pixelate: return nil
-        }
     }
 }

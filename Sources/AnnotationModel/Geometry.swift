@@ -61,17 +61,18 @@ public enum ImageRef: Codable, Equatable, Sendable {
 /// fraction of any image regardless of its pixel dimensions.
 public enum DefaultSizeScale {
     public static let referenceCanvasSize = CGSize(width: 1200, height: 1000)
+    private static let referenceDiagonal = hypot(referenceCanvasSize.width, referenceCanvasSize.height)
 
     public static func factor(forCanvasSize size: CGSize) -> CGFloat {
         let diagonal = hypot(size.width, size.height)
         guard diagonal > 0 else { return 1 }
-        return diagonal / hypot(referenceCanvasSize.width, referenceCanvasSize.height)
+        return diagonal / referenceDiagonal
     }
 }
 
 /// Default stroke width for new annotations, scaled to the canvas size.
 public enum DefaultStrokeWidth {
-    /// Full stroke-width range; the single definition shared with the UI slider.
+    /// Valid stroke-width range; scaled defaults are clamped to it.
     public static let range: ClosedRange<CGFloat> = 1...40
     /// Arrow/line width at the reference canvas size (~40% of the slider).
     public static let segmentReferenceWidth: CGFloat = 16
@@ -94,12 +95,6 @@ public enum DefaultInitialSize {
     public static let segment = CGVector(dx: 100, dy: 70)
     /// Default box for a freshly placed rectangle/ellipse/pixelate.
     public static let size = CGSize(width: 120, height: 90)
-
-    /// The default box centered on the click point.
-    public static func rect(centeredOn point: CGPoint) -> CGRect {
-        CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
-               width: size.width, height: size.height)
-    }
 
     /// Tail→head vector for a freshly placed arrow/line, scaled to the canvas.
     public static func segment(forCanvasSize canvasSize: CGSize) -> CGVector {
