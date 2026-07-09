@@ -229,6 +229,34 @@ final class AnnotationModelTests: XCTestCase {
         }
     }
 
+    func testDefaultStrokeWidthAtReferenceCanvasIsReferenceWidth() {
+        let reference = DefaultSizeScale.referenceCanvasSize
+        XCTAssertEqual(DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth,
+                                                forCanvasSize: reference),
+                       DefaultStrokeWidth.segmentReferenceWidth)
+        XCTAssertEqual(DefaultStrokeWidth.width(reference: DefaultStrokeWidth.shapeReferenceWidth,
+                                                forCanvasSize: reference),
+                       DefaultStrokeWidth.shapeReferenceWidth)
+    }
+
+    func testDefaultStrokeWidthScalesWithCanvasDiagonal() {
+        // Double the reference canvas → double the width.
+        let doubled = CGSize(width: 2400, height: 2000)
+        XCTAssertEqual(DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth,
+                                                forCanvasSize: doubled), 32)
+        XCTAssertEqual(DefaultStrokeWidth.width(reference: DefaultStrokeWidth.shapeReferenceWidth,
+                                                forCanvasSize: doubled), 16)
+    }
+
+    func testDefaultStrokeWidthClampsToSliderRange() {
+        XCTAssertEqual(DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth,
+                                                forCanvasSize: CGSize(width: 20, height: 20)),
+                       DefaultStrokeWidth.range.lowerBound)
+        XCTAssertEqual(DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth,
+                                                forCanvasSize: CGSize(width: 10000, height: 8000)),
+                       DefaultStrokeWidth.range.upperBound)
+    }
+
     func testColorRoundTripsForColoredKinds() {
         let seg = SegmentElement(start: .zero, end: CGPoint(x: 10, y: 0), width: 6)
         let shape = ShapeElement(rect: CGRect(x: 0, y: 0, width: 10, height: 10), width: 6)

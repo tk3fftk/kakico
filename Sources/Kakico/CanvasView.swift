@@ -518,8 +518,8 @@ final class CanvasNSView: NSView {
         // A plain click (no real drag) leaves a degenerate element: give it a
         // default initial size, Skitch-style, rather than dropping it. Drag-
         // created elements keep their size (the helper is a no-op for them).
-        if case .creating(let id, _) = drag {
-            controller.document?.mutate(id) { $0 = $0.applyingDefaultInitialSize() }
+        if case .creating(let id, _) = drag, let canvasSize = controller.document?.canvasSize {
+            controller.document?.mutate(id) { $0 = $0.applyingDefaultInitialSize(canvasSize: canvasSize) }
         }
         // Keep the crop rect within the canvas; drop degenerate ones.
         switch drag {

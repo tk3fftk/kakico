@@ -56,6 +56,35 @@ public enum ImageRef: Codable, Equatable, Sendable {
     case pngData(Data)
 }
 
+/// Scale for size defaults, proportional to the canvas diagonal relative to a
+/// reference canvas. Defaults sized through this occupy the same visual
+/// fraction of any image regardless of its pixel dimensions.
+public enum DefaultSizeScale {
+    public static let referenceCanvasSize = CGSize(width: 1200, height: 1000)
+
+    public static func factor(forCanvasSize size: CGSize) -> CGFloat {
+        let diagonal = hypot(size.width, size.height)
+        guard diagonal > 0 else { return 1 }
+        return diagonal / hypot(referenceCanvasSize.width, referenceCanvasSize.height)
+    }
+}
+
+/// Default stroke width for new annotations, scaled to the canvas size.
+public enum DefaultStrokeWidth {
+    /// Full stroke-width range; the single definition shared with the UI slider.
+    public static let range: ClosedRange<CGFloat> = 1...40
+    /// Arrow/line width at the reference canvas size (~40% of the slider).
+    public static let segmentReferenceWidth: CGFloat = 16
+    /// Rectangle/ellipse outline width at the reference canvas size — an
+    /// outline of the segment width reads far heavier, so shapes get half.
+    public static let shapeReferenceWidth: CGFloat = 8
+
+    public static func width(reference: CGFloat, forCanvasSize size: CGSize) -> CGFloat {
+        let scaled = (reference * DefaultSizeScale.factor(forCanvasSize: size)).rounded()
+        return min(range.upperBound, max(range.lowerBound, scaled))
+    }
+}
+
 /// Default geometry for click-to-place (no-drag) object creation, Skitch-style.
 public enum DefaultInitialSize {
     /// Raw extent below which a freshly created element counts as a plain click
@@ -70,6 +99,20 @@ public enum DefaultInitialSize {
     public static func rect(centeredOn point: CGPoint) -> CGRect {
         CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
                width: size.width, height: size.height)
+    }
+
+    /// Tail→head vector for a freshly placed arrow/line, scaled to the canvas.
+    public static func segment(forCanvasSize canvasSize: CGSize) -> CGVector {
+        let s = DefaultSizeScale.factor(forCanvasSize: canvasSize)
+        return CGVector(dx: segment.dx * s, dy: segment.dy * s)
+    }
+
+    /// The default box centered on the click point, scaled to the canvas.
+    public static func rect(centeredOn point: CGPoint, canvasSize: CGSize) -> CGRect {
+        let s = DefaultSizeScale.factor(forCanvasSize: canvasSize)
+        let scaled = CGSize(width: size.width * s, height: size.height * s)
+        return CGRect(x: point.x - scaled.width / 2, y: point.y - scaled.height / 2,
+                      width: scaled.width, height: scaled.height)
     }
 }
 

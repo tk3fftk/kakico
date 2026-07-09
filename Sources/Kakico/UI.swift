@@ -319,7 +319,7 @@ struct ToolPalette: View {
                         .foregroundStyle(MiroTheme.textSecondary(scheme))
                     MiroSlider(
                         value: $controller.strokeWidth,
-                        range: 1...40,
+                        range: DefaultStrokeWidth.range,
                         onEditingChanged: { editing in
                             if editing { controller.beginInteraction() } else { controller.commitInteraction() }
                         },

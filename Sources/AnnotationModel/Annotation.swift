@@ -79,31 +79,32 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
     /// element; give it a sensible default size anchored at the click point so
     /// the object appears without a drag. Non-degenerate (drag-created)
     /// elements and text (already placed at a default size) are unchanged.
-    public func applyingDefaultInitialSize() -> Annotation {
+    public func applyingDefaultInitialSize(canvasSize: CGSize) -> Annotation {
         switch self {
-        case .arrow(let e):     return .arrow(Self.defaultSized(e))
-        case .line(let e):      return .line(Self.defaultSized(e))
-        case .rectangle(let e): return .rectangle(Self.defaultSized(e))
-        case .ellipse(let e):   return .ellipse(Self.defaultSized(e))
-        case .pixelate(let e):  return .pixelate(Self.defaultSized(e))
+        case .arrow(let e):     return .arrow(Self.defaultSized(e, canvasSize: canvasSize))
+        case .line(let e):      return .line(Self.defaultSized(e, canvasSize: canvasSize))
+        case .rectangle(let e): return .rectangle(Self.defaultSized(e, canvasSize: canvasSize))
+        case .ellipse(let e):   return .ellipse(Self.defaultSized(e, canvasSize: canvasSize))
+        case .pixelate(let e):  return .pixelate(Self.defaultSized(e, canvasSize: canvasSize))
         case .text:             return self   // already placed at a default size
         }
     }
 
     // Degeneracy is judged on raw geometry (not boundingBox, whose -width inset
     // would make a zero-length segment look non-degenerate).
-    private static func defaultSized(_ e: SegmentElement) -> SegmentElement {
+    private static func defaultSized(_ e: SegmentElement, canvasSize: CGSize) -> SegmentElement {
         guard GeometryMath.distance(from: e.start, to: e.end) < DefaultInitialSize.degenerateThreshold else { return e }
         var e = e
-        e.end = CGPoint(x: e.start.x + DefaultInitialSize.segment.dx,
-                        y: e.start.y + DefaultInitialSize.segment.dy)
+        let vector = DefaultInitialSize.segment(forCanvasSize: canvasSize)
+        e.end = CGPoint(x: e.start.x + vector.dx,
+                        y: e.start.y + vector.dy)
         return e
     }
 
-    private static func defaultSized<T: RectGeometry>(_ e: T) -> T {
+    private static func defaultSized<T: RectGeometry>(_ e: T, canvasSize: CGSize) -> T {
         guard max(e.rect.width, e.rect.height) < DefaultInitialSize.degenerateThreshold else { return e }
         var e = e
-        e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin)
+        e.rect = DefaultInitialSize.rect(centeredOn: e.rect.origin, canvasSize: canvasSize)
         return e
     }
 
