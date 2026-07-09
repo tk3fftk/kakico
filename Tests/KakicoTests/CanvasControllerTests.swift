@@ -83,4 +83,16 @@ final class CanvasControllerTests: XCTestCase {
         controller.tool = .rectangle
         XCTAssertEqual(controller.strokeWidth, 16)
     }
+
+    // MARK: - Tool switch clears selection
+
+    func testToolSwitchClearsSelection() {
+        let controller = makeLoadedController()
+        let arrow = Annotation.arrow(Arrow(from: .zero, to: CGPoint(x: 100, y: 100)))
+        controller.document?.elements.append(arrow)
+        controller.selection = arrow.id
+        XCTAssertNotNil(controller.selection)
+        controller.tool = .rectangle
+        XCTAssertNil(controller.selection)
+    }
 }

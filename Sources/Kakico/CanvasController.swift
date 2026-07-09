@@ -20,7 +20,10 @@ final class CanvasController {
         didSet { syncToolStateFromSelection() }
     }
     var tool: Tool = .arrow {
-        didSet { adoptStrokeWidthForTool() }
+        didSet {
+            selection = nil
+            adoptStrokeWidthForTool()
+        }
     }
     /// True while the inline text annotation editor is active; disables the
     /// unmodified single-letter tool shortcuts so they don't steal typing.
