@@ -88,7 +88,8 @@ final class CanvasControllerTests: XCTestCase {
 
     func testToolSwitchClearsSelection() {
         let controller = makeLoadedController()
-        let arrow = Annotation.arrow(Arrow(from: .zero, to: CGPoint(x: 100, y: 100)))
+        let seg = SegmentElement(start: .zero, end: CGPoint(x: 100, y: 100))
+        let arrow = Annotation.arrow(seg)
         controller.document?.elements.append(arrow)
         controller.selection = arrow.id
         XCTAssertNotNil(controller.selection)
