@@ -37,6 +37,11 @@ final class CanvasController {
             applyStrokeWidthToSelection()
         }
     }
+    /// Pixel block size for new pixelate elements; edits the selected pixelate
+    /// element when one is selected (mirrors `strokeWidth`).
+    var pixelateAmount: CGFloat = RedactionElement.defaultPixelateAmount {
+        didSet { applyPixelateAmountToSelection() }
+    }
     /// Per-group stroke width memory: each tool family keeps its own width so
     /// thick arrows don't force thick shape outlines. `strokeWidth` mirrors
     /// the active group's value.
@@ -130,6 +135,7 @@ final class CanvasController {
         self.sourceURL = sourceURL
         selection = nil
         groupWidths = Self.defaultGroupWidths(forCanvasSize: size)
+        pixelateAmount = RedactionElement.defaultAmount(forCanvasSize: size)
         adoptStrokeWidthForTool()
         undoStack.removeAll()
         redoStack.removeAll()
@@ -266,6 +272,7 @@ final class CanvasController {
         }
         rememberWidth(strokeWidth, for: element.strokeWidthGroup)
         if let color = element.color, color != strokeColor { strokeColor = color }
+        if let amount = element.pixelateAmount, amount != pixelateAmount { pixelateAmount = amount }
     }
 
     /// Applies the global stroke width to the selected element; no-op when the
@@ -286,6 +293,18 @@ final class CanvasController {
         } else if let current = doc.elements[i].strokeWidth, current != strokeWidth {
             document?.elements[i].strokeWidth = strokeWidth
         }
+    }
+
+    /// Applies the global pixelate amount to the selected element; no-op when
+    /// the value is unchanged (breaks the sync → apply feedback loop) or the
+    /// element is not a pixelate. Undo boundaries are the caller's job (the
+    /// slider wraps drags in begin/commitInteraction).
+    private func applyPixelateAmountToSelection() {
+        guard !isSyncing else { return }
+        guard let sel = selection, let doc = document, let i = doc.index(of: sel),
+              let current = doc.elements[i].pixelateAmount,
+              current != pixelateAmount else { return }
+        document?.elements[i].pixelateAmount = pixelateAmount
     }
 
     /// Applies the global stroke color to the selected element; no-op when the

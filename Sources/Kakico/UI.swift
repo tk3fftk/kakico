@@ -309,17 +309,17 @@ struct ToolPalette: View {
             Button {
                 showsStrokeWidth.toggle()
             } label: {
-                tileIcon("lineweight", tint: MiroTheme.textSecondary(scheme))
+                tileIcon(sizeSliderSymbol, tint: MiroTheme.textSecondary(scheme))
             }
             .buttonStyle(MiroTileButtonStyle())
-            .help("Stroke width")
+            .help(adjustsPixelateAmount ? "Pixel size" : "Stroke width")
             .popover(isPresented: $showsStrokeWidth, arrowEdge: .trailing) {
                 HStack(spacing: 8) {
-                    Image(systemName: "lineweight")
+                    Image(systemName: sizeSliderSymbol)
                         .foregroundStyle(MiroTheme.textSecondary(scheme))
                     MiroSlider(
-                        value: $controller.strokeWidth,
-                        range: DefaultStrokeWidth.range,
+                        value: adjustsPixelateAmount ? $controller.pixelateAmount : $controller.strokeWidth,
+                        range: adjustsPixelateAmount ? RedactionElement.amountRange : DefaultStrokeWidth.range,
                         onEditingChanged: { editing in
                             if editing { controller.beginInteraction() } else { controller.commitInteraction() }
                         },
@@ -330,6 +330,20 @@ struct ToolPalette: View {
             }
         }
         .miroFloatingPanel()
+    }
+
+    /// True when the size slider should edit the pixelate block size instead
+    /// of the stroke width: the pixelate tool is active or a pixelate element
+    /// is selected.
+    private var adjustsPixelateAmount: Bool {
+        if controller.tool == .pixelate { return true }
+        guard let sel = controller.selection, let doc = controller.document,
+              let i = doc.index(of: sel) else { return false }
+        return doc.elements[i].pixelateAmount != nil
+    }
+
+    private var sizeSliderSymbol: String {
+        adjustsPixelateAmount ? Tool.pixelate.symbol : "lineweight"
     }
 }
 

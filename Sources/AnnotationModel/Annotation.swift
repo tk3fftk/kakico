@@ -51,6 +51,20 @@ public enum Annotation: Codable, Equatable, Sendable, Identifiable {
         }
     }
 
+    /// Pixel block size of a pixelate element; nil for other kinds. Setting
+    /// is a no-op for those kinds and for nil.
+    public var pixelateAmount: CGFloat? {
+        get {
+            guard case .pixelate(let e) = self else { return nil }
+            return e.amount
+        }
+        set {
+            guard case .pixelate(var e) = self, let amount = newValue else { return }
+            e.amount = amount
+            self = .pixelate(e)
+        }
+    }
+
     /// Color of the wrapped element; nil for kinds without one (pixelate).
     /// Setting is a no-op for those kinds and for nil.
     public var color: RGBAColor? {

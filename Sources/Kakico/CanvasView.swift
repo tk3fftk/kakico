@@ -466,7 +466,7 @@ final class CanvasNSView: NSView {
         case .ellipse:
             new = .ellipse(ShapeElement(rect: zeroRect, color: color, width: width))
         case .pixelate:
-            new = .pixelate(RedactionElement(rect: zeroRect, amount: RedactionElement.defaultPixelateAmount))
+            new = .pixelate(RedactionElement(rect: zeroRect, amount: controller.pixelateAmount))
         default:
             return
         }

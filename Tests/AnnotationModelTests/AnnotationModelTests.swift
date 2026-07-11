@@ -279,6 +279,44 @@ final class AnnotationModelTests: XCTestCase {
         XCTAssertEqual(ann, before)
     }
 
+    func testPixelateAmountRoundTripsForPixelate() {
+        var ann = Annotation.pixelate(RedactionElement(rect: CGRect(x: 0, y: 0, width: 10, height: 10), amount: 14))
+        XCTAssertEqual(ann.pixelateAmount, 14)
+        ann.pixelateAmount = 30
+        XCTAssertEqual(ann.pixelateAmount, 30)
+    }
+
+    func testPixelateAmountIsNilAndSetterIsNoOpForOtherKinds() {
+        let others: [Annotation] = [
+            .arrow(SegmentElement(start: .zero, end: CGPoint(x: 10, y: 0), width: 6)),
+            .rectangle(ShapeElement(rect: CGRect(x: 0, y: 0, width: 10, height: 10), width: 6)),
+            .text(TextElement(origin: .zero, string: "hi")),
+        ]
+        for var ann in others {
+            XCTAssertNil(ann.pixelateAmount)
+            let before = ann
+            ann.pixelateAmount = 30
+            XCTAssertEqual(ann, before)
+        }
+    }
+
+    func testDefaultPixelateAmountAtReferenceCanvasIsReferenceAmount() {
+        XCTAssertEqual(RedactionElement.defaultAmount(forCanvasSize: DefaultSizeScale.referenceCanvasSize),
+                       RedactionElement.defaultPixelateAmount)
+    }
+
+    func testDefaultPixelateAmountScalesWithCanvasDiagonal() {
+        // Double the reference canvas → double the block size.
+        XCTAssertEqual(RedactionElement.defaultAmount(forCanvasSize: CGSize(width: 2400, height: 2000)), 28)
+    }
+
+    func testDefaultPixelateAmountClampsToSliderRange() {
+        XCTAssertEqual(RedactionElement.defaultAmount(forCanvasSize: CGSize(width: 20, height: 20)),
+                       RedactionElement.amountRange.lowerBound)
+        XCTAssertEqual(RedactionElement.defaultAmount(forCanvasSize: CGSize(width: 10000, height: 8000)),
+                       RedactionElement.amountRange.upperBound)
+    }
+
     func testDocumentCodableRoundTrip() throws {
         let doc = Document(
             baseImage: .pngData(Data([0, 1, 2, 3])),
