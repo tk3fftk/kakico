@@ -68,6 +68,13 @@ public enum DefaultSizeScale {
         guard diagonal > 0 else { return 1 }
         return diagonal / referenceDiagonal
     }
+
+    /// Scales a reference value by the canvas factor, rounds, and clamps to `range`.
+    public static func scaledDefault(reference: CGFloat, clampedTo range: ClosedRange<CGFloat>,
+                                     forCanvasSize size: CGSize) -> CGFloat {
+        let scaled = (reference * factor(forCanvasSize: size)).rounded()
+        return min(range.upperBound, max(range.lowerBound, scaled))
+    }
 }
 
 /// Default stroke width for new annotations, scaled to the canvas size.
@@ -81,8 +88,7 @@ public enum DefaultStrokeWidth {
     public static let shapeReferenceWidth: CGFloat = 8
 
     public static func width(reference: CGFloat, forCanvasSize size: CGSize) -> CGFloat {
-        let scaled = (reference * DefaultSizeScale.factor(forCanvasSize: size)).rounded()
-        return min(range.upperBound, max(range.lowerBound, scaled))
+        DefaultSizeScale.scaledDefault(reference: reference, clampedTo: range, forCanvasSize: size)
     }
 }
 

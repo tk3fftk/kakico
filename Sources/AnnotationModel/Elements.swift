@@ -138,8 +138,8 @@ public struct RedactionElement: Codable, Equatable, Sendable, RectGeometry {
     /// The default block size scaled to the canvas (like stroke widths); at
     /// the reference canvas size this is `defaultPixelateAmount` itself.
     public static func defaultAmount(forCanvasSize size: CGSize) -> CGFloat {
-        let scaled = (defaultPixelateAmount * DefaultSizeScale.factor(forCanvasSize: size)).rounded()
-        return min(amountRange.upperBound, max(amountRange.lowerBound, scaled))
+        DefaultSizeScale.scaledDefault(reference: defaultPixelateAmount, clampedTo: amountRange,
+                                       forCanvasSize: size)
     }
 
     public var id: ElementID

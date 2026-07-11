@@ -256,6 +256,15 @@ final class CanvasController {
         groupWidths[group] = width
     }
 
+    /// True when the size slider edits the pixelate block size instead of the
+    /// stroke width: the pixelate tool is active or a pixelate element is
+    /// selected.
+    var sliderEditsPixelateAmount: Bool {
+        if tool == .pixelate { return true }
+        guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return false }
+        return doc.elements[i].pixelateAmount != nil
+    }
+
     /// Adopts the selected element's stroke width and color so the controls
     /// start from the current values (and new elements of its group inherit
     /// them).

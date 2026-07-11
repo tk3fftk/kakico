@@ -270,7 +270,9 @@ struct ToolPalette: View {
     }
 
     private var palette: some View {
-        VStack(spacing: 4) {
+        let editsPixelate = controller.sliderEditsPixelateAmount
+        let sliderSymbol = editsPixelate ? Tool.pixelate.symbol : "lineweight"
+        return VStack(spacing: 4) {
             ForEach(Tool.allCases) { tool in
                 Button {
                     if reduceMotion {
@@ -309,17 +311,17 @@ struct ToolPalette: View {
             Button {
                 showsStrokeWidth.toggle()
             } label: {
-                tileIcon(sizeSliderSymbol, tint: MiroTheme.textSecondary(scheme))
+                tileIcon(sliderSymbol, tint: MiroTheme.textSecondary(scheme))
             }
             .buttonStyle(MiroTileButtonStyle())
-            .help(adjustsPixelateAmount ? "Pixel size" : "Stroke width")
+            .help(editsPixelate ? "Pixel size" : "Stroke width")
             .popover(isPresented: $showsStrokeWidth, arrowEdge: .trailing) {
                 HStack(spacing: 8) {
-                    Image(systemName: sizeSliderSymbol)
+                    Image(systemName: sliderSymbol)
                         .foregroundStyle(MiroTheme.textSecondary(scheme))
                     MiroSlider(
-                        value: adjustsPixelateAmount ? $controller.pixelateAmount : $controller.strokeWidth,
-                        range: adjustsPixelateAmount ? RedactionElement.amountRange : DefaultStrokeWidth.range,
+                        value: editsPixelate ? $controller.pixelateAmount : $controller.strokeWidth,
+                        range: editsPixelate ? RedactionElement.amountRange : DefaultStrokeWidth.range,
                         onEditingChanged: { editing in
                             if editing { controller.beginInteraction() } else { controller.commitInteraction() }
                         },
@@ -330,20 +332,6 @@ struct ToolPalette: View {
             }
         }
         .miroFloatingPanel()
-    }
-
-    /// True when the size slider should edit the pixelate block size instead
-    /// of the stroke width: the pixelate tool is active or a pixelate element
-    /// is selected.
-    private var adjustsPixelateAmount: Bool {
-        if controller.tool == .pixelate { return true }
-        guard let sel = controller.selection, let doc = controller.document,
-              let i = doc.index(of: sel) else { return false }
-        return doc.elements[i].pixelateAmount != nil
-    }
-
-    private var sizeSliderSymbol: String {
-        adjustsPixelateAmount ? Tool.pixelate.symbol : "lineweight"
     }
 }
 
