@@ -104,6 +104,40 @@ final class AnnotationRenderTests: XCTestCase {
         XCTAssertNotEqual(pixelHash(plain), pixelHash(annotated))
     }
 
+    // MARK: - Redaction render cache
+
+    func testRedactionRepeatFlattenIsStable() {
+        let base = topRedBottomBlueImage(CGSize(width: 100, height: 100))
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 100))
+        doc.add(.pixelate(RedactionElement(rect: CGRect(x: 20, y: 20, width: 60, height: 60), amount: 12)))
+        let first = Renderer.flatten(doc, baseImage: base, scale: 1)!
+        let second = Renderer.flatten(doc, baseImage: base, scale: 1)!
+        XCTAssertEqual(pixelHash(first), pixelHash(second),
+                       "a cached redaction must blit the same pixels a fresh render produces")
+    }
+
+    func testRedactionAmountChangeChangesPixels() {
+        let base = topRedBottomBlueImage(CGSize(width: 100, height: 100))
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 100))
+        doc.add(.pixelate(RedactionElement(rect: CGRect(x: 20, y: 20, width: 60, height: 60), amount: 6)))
+        let fine = Renderer.flatten(doc, baseImage: base, scale: 1)!
+        doc.elements[0].pixelateAmount = 34
+        let coarse = Renderer.flatten(doc, baseImage: base, scale: 1)!
+        XCTAssertNotEqual(pixelHash(fine), pixelHash(coarse),
+                          "a changed amount must not be served stale pixels from the cache")
+    }
+
+    func testRedactionFollowsBaseImageSwap() {
+        let size = CGSize(width: 100, height: 100)
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: size)
+        doc.add(.pixelate(RedactionElement(rect: CGRect(x: 20, y: 20, width: 60, height: 60), amount: 12)))
+        _ = Renderer.flatten(doc, baseImage: solidImage(size, color: (1, 0, 0)), scale: 1)!
+        let out = Renderer.flatten(doc, baseImage: solidImage(size, color: (0, 0, 1)), scale: 1)!
+        let px = samplePixel(out, x: 50, y: 50)
+        XCTAssertGreaterThan(px.b, 200, "a new base image must not be served the old image's pixels")
+        XCTAssertLessThan(px.r, 50)
+    }
+
     // MARK: - Export bounds
 
     func testFlattenExpandToFitExpandsCanvas() {

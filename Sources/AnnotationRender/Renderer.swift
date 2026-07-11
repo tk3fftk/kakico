@@ -12,6 +12,20 @@ public enum Renderer {
 
     private static let ciContext = CIContext(options: [.useSoftwareRenderer: true])
 
+    /// Pixellated output per (base image, rect, amount). CIPixellate runs on
+    /// the software renderer, so re-rendering every redaction on every
+    /// flatten makes canvas redraws O(number of redactions) — measured at
+    /// ~11ms per large redaction, i.e. 3+ redactions blow the 16ms frame
+    /// budget during a slider drag. With the cache only the element being
+    /// edited re-renders; the rest are straight blits. NSCache is documented
+    /// thread-safe, hence `nonisolated(unsafe)`.
+    private nonisolated(unsafe) static let redactionCache: NSCache<NSString, CGImage> = {
+        let cache = NSCache<NSString, CGImage>()
+        cache.countLimit = 64
+        cache.totalCostLimit = 128 * 1024 * 1024
+        return cache
+    }()
+
     /// Draws the base image plus every annotation into `ctx`. The context must
     /// already be set up so that model coordinates (top-left origin, y-down)
     /// map directly — see `flatten` / the canvas view for the CTM setup.
@@ -197,6 +211,14 @@ public enum Renderer {
             ctx.fill(rect)
             return
         }
+        // The base image's identity plus its dimensions guards against a
+        // recycled ObjectIdentifier serving stale pixels for a new image.
+        let key = "\(ObjectIdentifier(base))|\(base.width)x\(base.height)|\(rect)|\(amount)|\(canvasSize.height)" as NSString
+        if let cached = redactionCache.object(forKey: key) {
+            drawImage(cached, in: rect, ctx: ctx)
+            return
+        }
+
         // CIImage is y-up; convert the y-down model rect into image space.
         let ciImage = CIImage(cgImage: base)
         let flippedY = canvasSize.height - rect.maxY
@@ -208,6 +230,7 @@ public enum Renderer {
         f.setValue(CIVector(x: ciRect.midX, y: ciRect.midY), forKey: kCIInputCenterKey)
         let cropped = f.outputImage!.cropped(to: ciRect)
         guard let out = ciContext.createCGImage(cropped, from: ciRect) else { return }
+        redactionCache.setObject(out, forKey: key, cost: out.bytesPerRow * out.height)
         drawImage(out, in: rect, ctx: ctx)
     }
 }
