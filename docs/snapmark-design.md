@@ -250,3 +250,11 @@ Drag a rect with the crop tool; re-edit via corner handles or drag inside to mov
 clamped to the canvas on mouse-up. `Esc` cancels, `Return` (or the toolbar button)
 applies **destructively but undoably** — trims the base image, translates elements,
 shrinks the canvas. A *pending* crop stays non-destructive and export honors it.
+
+### `.kakico` native document support removed (2026-07-11)
+
+The `.kakico` save/open feature described above (Phase 4, "Native save format") was
+removed in issue #42: saving embedded the pre-redaction base PNG verbatim, so sharing
+a `.kakico` file exposed pixelated/blurred content, and the format was effectively
+unused (menu-only, no Finder integration, no overwrite-save or dirty tracking).
+`ImageRef` and `Document: Codable` remain — they serve the in-memory model and tests.

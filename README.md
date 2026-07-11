@@ -14,9 +14,8 @@ Open or paste an image, mark it up, and export:
 - **Crop:** drag a crop rect (marching ants), re-edit it via corner handles or by
   dragging it around; `Return` applies it destructively (undoable), `Esc` cancels.
   Export honors a pending crop without applying it.
-- **Output:** export PNG/JPEG, copy to clipboard, drag-out as a PNG file
-  (`NSFilePromiseProvider`), and a self-contained `.kakico` document format
-  (JSON + embedded base image).
+- **Output:** export PNG/JPEG, copy to clipboard, and drag-out as a PNG file
+  (`NSFilePromiseProvider`).
 
 Screen capture is intentionally out of scope — feed it images from macOS's built-in
 Screenshot (⇧⌘4), Finder drag-drop, or paste.

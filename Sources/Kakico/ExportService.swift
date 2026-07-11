@@ -116,46 +116,4 @@ enum ExportService {
             controller.loadImage(at: url)
         }
     }
-
-    // MARK: Native document format (.kakico — JSON package with embedded PNG)
-
-    static func saveDocument(_ controller: CanvasController) {
-        guard var doc = controller.document, let cg = controller.baseImage else { NSSound.beep(); return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: "kakico") ?? .json]
-        panel.nameFieldStringValue = "untitled.kakico"
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            // Embed the base image so the document is self-contained.
-            if let png = Renderer.encode(cg, as: .png) {
-                doc.baseImage = .pngData(png)
-            }
-            do {
-                let data = try JSONEncoder().encode(doc)
-                try data.write(to: url)
-            } catch {
-                NSAlert(error: error).runModal()
-            }
-        }
-    }
-
-    static func openDocument(_ controller: CanvasController) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: "kakico") ?? .json]
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                let data = try Data(contentsOf: url)
-                let doc = try JSONDecoder().decode(Document.self, from: data)
-                guard case .pngData(let png) = doc.baseImage,
-                      let cg = ImageLoader.cgImage(from: png) else {
-                    NSSound.beep(); return
-                }
-                controller.loadImage(cg)
-                controller.document = doc
-            } catch {
-                NSAlert(error: error).runModal()
-            }
-        }
-    }
 }

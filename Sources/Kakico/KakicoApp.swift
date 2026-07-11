@@ -214,8 +214,6 @@ struct AppCommands: Commands {
             Divider()
             Button("Open Image…") { ExportService.openPanel(workspace.active) }
                 .keyboardShortcut("o", modifiers: .command)
-            Button("Open Kakico Document…") { ExportService.openDocument(workspace.active) }
-                .keyboardShortcut("o", modifiers: [.command, .shift])
             // ⇧⌘V kept as an explicit alias; plain ⌘V is handled by the key
             // monitor in AppDelegate so it still reaches inline text editors.
             Button("Paste Image") { ExportService.confirmAndPasteImage(workspace.active) }
@@ -228,9 +226,6 @@ struct AppCommands: Commands {
             Button("Close Tab") { workspace.closeActiveTab() }
                 .keyboardShortcut("w", modifiers: .command)
             Divider()
-            Button("Save Kakico Document…") { ExportService.saveDocument(workspace.active) }
-                .keyboardShortcut("s", modifiers: .command)
-                .disabled(!workspace.active.hasDocument)
             Button("Export Image…") { ExportService.exportPanel(workspace.active) }
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(!workspace.active.hasDocument)
