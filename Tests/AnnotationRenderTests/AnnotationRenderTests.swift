@@ -106,8 +106,29 @@ final class AnnotationRenderTests: XCTestCase {
 
     // MARK: - Redaction render cache
 
+    /// Per-pixel gradient: unlike a solid or two-band image, every pixelate
+    /// block size produces distinct output (a straight color boundary can
+    /// align with the block grid and pixellate back to itself).
+    private func gradientImage(_ size: CGSize) -> CGImage {
+        let w = Int(size.width), h = Int(size.height)
+        var buf = [UInt8](repeating: 255, count: w * h * 4)
+        for y in 0..<h {
+            for x in 0..<w {
+                let i = (y * w + x) * 4
+                buf[i] = UInt8((x * 7) % 256)
+                buf[i + 1] = UInt8((y * 13) % 256)
+                buf[i + 2] = UInt8((x + y) % 256)
+            }
+        }
+        let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+        let ctx = CGContext(data: &buf, width: w, height: h, bitsPerComponent: 8,
+                            bytesPerRow: w * 4, space: cs,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        return ctx.makeImage()!
+    }
+
     func testRedactionRepeatFlattenIsStable() {
-        let base = topRedBottomBlueImage(CGSize(width: 100, height: 100))
+        let base = gradientImage(CGSize(width: 100, height: 100))
         var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 100))
         doc.add(.pixelate(RedactionElement(rect: CGRect(x: 20, y: 20, width: 60, height: 60), amount: 12)))
         let first = Renderer.flatten(doc, baseImage: base, scale: 1)!
@@ -117,7 +138,7 @@ final class AnnotationRenderTests: XCTestCase {
     }
 
     func testRedactionAmountChangeChangesPixels() {
-        let base = topRedBottomBlueImage(CGSize(width: 100, height: 100))
+        let base = gradientImage(CGSize(width: 100, height: 100))
         var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 100))
         doc.add(.pixelate(RedactionElement(rect: CGRect(x: 20, y: 20, width: 60, height: 60), amount: 6)))
         let fine = Renderer.flatten(doc, baseImage: base, scale: 1)!
