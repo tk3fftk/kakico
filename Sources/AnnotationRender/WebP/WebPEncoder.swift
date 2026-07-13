@@ -9,12 +9,10 @@ public enum WebPEncoder {
     /// libwebp's WEBP_MAX_DIMENSION.
     public static let maxDimension = 16383
 
-    /// Default quality on libwebp's 0-100 scale, as a 0-1 fraction.
-    public static let defaultQuality: CGFloat = 0.8
-
-    /// Encodes a CGImage as lossy WebP. Returns nil when a side exceeds
-    /// 16383 pixels (a WebP format limit) or the bitmap can't be read.
-    public static func encodeLossy(_ image: CGImage, quality: CGFloat = defaultQuality) -> Data? {
+    /// Encodes a CGImage as lossy WebP. `quality` is a 0-1 fraction of
+    /// libwebp's 0-100 scale. Returns nil when a side exceeds 16383 pixels
+    /// (a WebP format limit) or the bitmap can't be read.
+    public static func encodeLossy(_ image: CGImage, quality: CGFloat) -> Data? {
         let width = image.width
         let height = image.height
         guard width > 0, height > 0, width <= maxDimension, height <= maxDimension else { return nil }

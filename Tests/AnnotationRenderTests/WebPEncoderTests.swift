@@ -54,7 +54,7 @@ final class WebPEncoderTests: XCTestCase {
 
     func testLossyRoundTripStaysClose() throws {
         let image = try makeTestImage(width: 320, height: 240)
-        let data = try XCTUnwrap(WebPEncoder.encodeLossy(image))
+        let data = try XCTUnwrap(WebPEncoder.encodeLossy(image, quality: 0.8))
         let decoded = try decodeWebP(data)
         XCTAssertEqual(decoded.width, 320)
         XCTAssertEqual(decoded.height, 240)
@@ -65,7 +65,7 @@ final class WebPEncoderTests: XCTestCase {
 
     func testLossyIsSmallerThanPNG() throws {
         let image = try makeTestImage(width: 512, height: 384)
-        let webp = try XCTUnwrap(WebPEncoder.encodeLossy(image))
+        let webp = try XCTUnwrap(WebPEncoder.encodeLossy(image, quality: 0.8))
         let png = try XCTUnwrap(Renderer.encode(image, as: .png))
         XCTAssertLessThan(webp.count, png.count)
     }
@@ -79,7 +79,7 @@ final class WebPEncoderTests: XCTestCase {
 
     func testAlphaSurvivesApproximately() throws {
         let image = try makeTestImage(width: 64, height: 64, alpha: 0.5)
-        let data = try XCTUnwrap(WebPEncoder.encodeLossy(image))
+        let data = try XCTUnwrap(WebPEncoder.encodeLossy(image, quality: 0.8))
         let decoded = try decodeWebP(data)
         let alphaInfo = decoded.alphaInfo
         XCTAssertTrue(alphaInfo != .none && alphaInfo != .noneSkipLast && alphaInfo != .noneSkipFirst,
@@ -94,7 +94,7 @@ final class WebPEncoderTests: XCTestCase {
                                           bitsPerComponent: 8, bytesPerRow: 0, space: cs,
                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         let oversized = try XCTUnwrap(ctx.makeImage())
-        XCTAssertNil(WebPEncoder.encodeLossy(oversized))
+        XCTAssertNil(WebPEncoder.encodeLossy(oversized, quality: 0.8))
     }
 
     func testRendererEncodeRoutesWebP() throws {
