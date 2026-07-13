@@ -21,7 +21,7 @@ Senior macOS Engineer, specializing in SwiftUI and AppKit.
 - Target macOS 15.0 or later.
 - Swift 6.2 or later.
 - Use `@Observable` classes for state. Do not use `ObservableObject` or `@Published`.
-- Do not introduce third-party frameworks or packages.
+- Do not introduce third-party frameworks or packages. (Exception: libwebp via SPM — ImageIO cannot encode WebP.)
 - Avoid AppKit unless a complex interaction requires `NSView` (e.g. `CanvasNSView`, `DragOutView`). Prefer SwiftUI-native solutions everywhere else.
 
 ### Swift instructions
@@ -43,6 +43,7 @@ Senior macOS Engineer, specializing in SwiftUI and AppKit.
 
 - `Sources/AnnotationModel/` — pure value-type model (no AppKit/SwiftUI imports).
 - `Sources/AnnotationRender/` — CoreGraphics rendering of `Document` into `CGImage`.
+- `Sources/AnnotationRender/WebP/` — lossy WebP encoding via the libwebp SPM package; ImageIO decodes WebP but cannot encode it.
 - `Sources/Kakico/` — SwiftUI app: `KakicoApp.swift`, `WorkspaceController.swift` (tab management: one `CanvasController` per tab), `CanvasController.swift` (the `@Observable` per-tab state root), `CanvasView.swift` (AppKit bridge), `UI.swift` (all other views), `Theme.swift` (Miro-style tokens and shared chrome), `ZoomMath.swift` (pure zoom/pan geometry), `ExportService.swift`.
 - `Tests/` — unit tests for AnnotationModel, AnnotationRender, and Kakico (ZoomMath, WorkspaceController).
 

@@ -41,17 +41,40 @@ enum ExportService {
         controller.flashToast("Copied to clipboard")
     }
 
+    private static let exportFormatKey = "exportFormat"
+
+    /// Last format chosen in the export panel; also its initial selection.
+    static var lastExportFormat: ExportFormat {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: exportFormatKey),
+                  let format = ExportFormat(rawValue: raw) else { return .png }
+            return format
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: exportFormatKey) }
+    }
+
     static func exportPanel(_ controller: CanvasController) {
         guard controller.hasDocument else { NSSound.beep(); return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png, .jpeg]
+        panel.allowedContentTypes = [lastExportFormat.utType]
         panel.canCreateDirectories = true
         let base = controller.sourceURL?.deletingPathExtension().lastPathComponent ?? "annotated"
-        panel.nameFieldStringValue = "\(base).png"
+        panel.nameFieldStringValue = "\(base).\(lastExportFormat.filenameExtension)"
+        let accessory = ExportFormatAccessory(selected: lastExportFormat)
+        accessory.onChange = { [weak panel] format in
+            lastExportFormat = format
+            // With a single allowed type the panel rewrites the typed
+            // extension to match.
+            panel?.allowedContentTypes = [format.utType]
+        }
+        panel.accessoryView = accessory.view
         panel.begin { response in
+            // Keeps the accessory's target/action wiring alive while the
+            // panel is on screen.
+            _ = accessory
             guard response == .OK, let url = panel.url else { return }
-            let ext = url.pathExtension.lowercased()
-            let type: UTType = (ext == "jpg" || ext == "jpeg") ? .jpeg : .png
+            let type = ExportFormat(fromExtension: url.pathExtension)?.utType
+                ?? lastExportFormat.utType
             export(controller, to: url, as: type)
         }
     }
@@ -115,5 +138,35 @@ enum ExportService {
             guard response == .OK, let url = panel.url else { return }
             controller.loadImage(at: url)
         }
+    }
+}
+
+/// "Format:" popup shown as the export save panel's accessory view.
+@MainActor
+private final class ExportFormatAccessory: NSObject {
+    let view: NSView
+    var onChange: ((ExportFormat) -> Void)?
+    private let popup: NSPopUpButton
+
+    init(selected: ExportFormat) {
+        popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        for format in ExportFormat.allCases {
+            popup.addItem(withTitle: format.displayName)
+        }
+        popup.selectItem(at: ExportFormat.allCases.firstIndex(of: selected) ?? 0)
+        let label = NSTextField(labelWithString: "Format:")
+        let stack = NSStackView(views: [label, popup])
+        stack.orientation = .horizontal
+        stack.edgeInsets = NSEdgeInsets(top: 8, left: 20, bottom: 8, right: 20)
+        view = stack
+        super.init()
+        popup.target = self
+        popup.action = #selector(selectionChanged)
+    }
+
+    @objc private func selectionChanged() {
+        let index = popup.indexOfSelectedItem
+        guard ExportFormat.allCases.indices.contains(index) else { return }
+        onChange?(ExportFormat.allCases[index])
     }
 }
