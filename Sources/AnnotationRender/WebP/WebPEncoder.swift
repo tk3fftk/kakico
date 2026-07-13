@@ -32,6 +32,13 @@ public enum WebPEncoder {
     /// Straight-alpha RGBA8 bytes (row-major, top row first) for any CGImage,
     /// normalized by redrawing into an sRGB context the same way
     /// `Renderer.flatten` renders.
+    ///
+    /// The redraw allocates a second width x height x 4 buffer on top of the
+    /// flattened bitmap, doubling peak memory on the WebP path. Accepted
+    /// trade-off (PR #44 review): CGBitmapContext cannot draw straight alpha
+    /// directly, avoiding the copy would need flatten to expose its raw
+    /// buffer for in-place unpremultiply, and the overhead only matters near
+    /// the 16383x16383 limit (~+1GB) — typical exports add tens of MB.
     private static func straightRGBA(of image: CGImage) -> [UInt8]? {
         let width = image.width
         let height = image.height
