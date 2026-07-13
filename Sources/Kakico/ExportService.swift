@@ -77,6 +77,22 @@ enum ExportService {
     }
 
     static func export(_ controller: CanvasController, to url: URL, as type: UTType) {
+        // WebP caps each side at 16383 px; check before the expensive flatten
+        // so the user gets a reason instead of a silent failure.
+        if type == .webP, let doc = controller.document {
+            let out = doc.outputRect(for: controller.exportBounds)
+            let pixelW = Int(out.width.rounded())
+            let pixelH = Int(out.height.rounded())
+            if max(pixelW, pixelH) > WebPEncoder.maxDimension {
+                let alert = NSAlert()
+                alert.messageText = "Cannot export as WebP"
+                alert.informativeText = "The image is \(pixelW) × \(pixelH) pixels, but WebP "
+                    + "supports at most \(WebPEncoder.maxDimension) pixels per side. "
+                    + "Export as PNG or JPEG instead."
+                alert.runModal()
+                return
+            }
+        }
         guard let cg = flatten(controller), let data = Renderer.encode(cg, as: type) else {
             NSSound.beep(); return
         }

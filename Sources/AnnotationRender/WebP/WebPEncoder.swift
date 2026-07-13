@@ -7,7 +7,7 @@ import libwebp
 public enum WebPEncoder {
 
     /// libwebp's WEBP_MAX_DIMENSION.
-    static let maxDimension = 16383
+    public static let maxDimension = 16383
 
     /// Default quality on libwebp's 0-100 scale, as a 0-1 fraction.
     public static let defaultQuality: CGFloat = 0.8
