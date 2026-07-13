@@ -57,43 +57,41 @@ enum ExportService {
         panel.canCreateDirectories = true
         let base = controller.sourceURL?.deletingPathExtension().lastPathComponent ?? "annotated"
         panel.nameFieldStringValue = "\(base).\(format.filenameExtension)"
-        let accessory = ExportFormatAccessory(selected: format)
-        accessory.onChange = { [weak panel] format in
-            lastExportFormat = format
+        let accessory = ExportFormatAccessory(selected: format) { [weak panel] format in
             // With a single allowed type the panel rewrites the typed
             // extension to match.
             panel?.allowedContentTypes = [format.utType]
         }
-        panel.accessoryView = accessory.view
+        panel.accessoryView = accessory
         panel.begin { response in
-            // Keeps the accessory's target/action wiring alive while the
-            // panel is on screen.
-            _ = accessory
             guard response == .OK, let url = panel.url else { return }
             // With a single allowed type the panel forces the extension to
-            // match, so the selection is the format.
-            export(controller, to: url, as: lastExportFormat.utType)
+            // match, so the selection is the format. Persist it only on save
+            // so a cancelled panel doesn't rewrite the sticky default.
+            lastExportFormat = accessory.selected
+            export(controller, to: url, as: accessory.selected)
         }
     }
 
-    static func export(_ controller: CanvasController, to url: URL, as type: UTType) {
-        // WebP caps each side at 16383 px; check before the expensive flatten
-        // so the user gets a reason instead of a silent failure.
-        if type == .webP, let doc = controller.document {
+    static func export(_ controller: CanvasController, to url: URL, as format: ExportFormat) {
+        // Some formats cap the pixel size (WebP: 16383 px per side); check
+        // before the expensive flatten so the user gets a reason instead of
+        // a silent failure.
+        if let limit = format.maxPixelDimension, let doc = controller.document {
             let out = doc.outputRect(for: controller.exportBounds)
             let pixelW = Int(out.width.rounded())
             let pixelH = Int(out.height.rounded())
-            if max(pixelW, pixelH) > WebPEncoder.maxDimension {
+            if max(pixelW, pixelH) > limit {
                 let alert = NSAlert()
-                alert.messageText = "Cannot export as WebP"
-                alert.informativeText = "The image is \(pixelW) × \(pixelH) pixels, but WebP "
-                    + "supports at most \(WebPEncoder.maxDimension) pixels per side. "
-                    + "Export as PNG or JPEG instead."
+                alert.messageText = "Cannot export as \(format.displayName)"
+                alert.informativeText = "The image is \(pixelW) × \(pixelH) pixels, but "
+                    + "\(format.displayName) supports at most \(limit) pixels per side. "
+                    + "Choose a different format."
                 alert.runModal()
                 return
             }
         }
-        guard let cg = flatten(controller), let data = Renderer.encode(cg, as: type) else {
+        guard let cg = flatten(controller), let data = Renderer.encode(cg, as: format.utType) else {
             NSSound.beep(); return
         }
         do {
@@ -155,31 +153,35 @@ enum ExportService {
 }
 
 /// "Format:" popup shown as the export save panel's accessory view.
-@MainActor
-private final class ExportFormatAccessory: NSObject {
-    let view: NSView
-    var onChange: ((ExportFormat) -> Void)?
+/// Being the view itself, `panel.accessoryView` keeps the target/action
+/// wiring alive for the panel's lifetime.
+private final class ExportFormatAccessory: NSStackView {
+    private(set) var selected: ExportFormat
+    private let onChange: (ExportFormat) -> Void
     private let popup: NSPopUpButton
 
-    init(selected: ExportFormat) {
+    init(selected: ExportFormat, onChange: @escaping (ExportFormat) -> Void) {
+        self.selected = selected
+        self.onChange = onChange
         popup = NSPopUpButton(frame: .zero, pullsDown: false)
         for format in ExportFormat.allCases {
             popup.addItem(withTitle: format.displayName)
         }
         popup.selectItem(at: ExportFormat.allCases.firstIndex(of: selected) ?? 0)
-        let label = NSTextField(labelWithString: "Format:")
-        let stack = NSStackView(views: [label, popup])
-        stack.orientation = .horizontal
-        stack.edgeInsets = NSEdgeInsets(top: 8, left: 20, bottom: 8, right: 20)
-        view = stack
-        super.init()
+        super.init(frame: .zero)
+        addArrangedSubview(NSTextField(labelWithString: "Format:"))
+        addArrangedSubview(popup)
+        orientation = .horizontal
+        edgeInsets = NSEdgeInsets(top: 8, left: 20, bottom: 8, right: 20)
         popup.target = self
         popup.action = #selector(selectionChanged)
     }
 
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
     @objc private func selectionChanged() {
-        let index = popup.indexOfSelectedItem
-        guard ExportFormat.allCases.indices.contains(index) else { return }
-        onChange?(ExportFormat.allCases[index])
+        selected = ExportFormat.allCases[popup.indexOfSelectedItem]
+        onChange(selected)
     }
 }

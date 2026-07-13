@@ -25,8 +25,8 @@ public enum WebPEncoder {
                            Int32(width * 4), clamped, &output)
         }
         guard size > 0, let output else { return nil }
-        defer { WebPFree(output) }
-        return Data(bytes: output, count: size)
+        return Data(bytesNoCopy: UnsafeMutableRawPointer(output), count: size,
+                    deallocator: .custom { ptr, _ in WebPFree(ptr) })
     }
 
     /// Straight-alpha RGBA8 bytes (row-major, top row first) for any CGImage,
@@ -65,12 +65,9 @@ public enum WebPEncoder {
         for i in stride(from: 0, to: rgba.count, by: 4) {
             let a = Int(rgba[i + 3])
             if a == 255 { continue }
-            if a == 0 {
-                rgba[i] = 0
-                rgba[i + 1] = 0
-                rgba[i + 2] = 0
-                continue
-            }
+            // a == 0: premultiplied RGB is already 0, only the division
+            // needs skipping.
+            if a == 0 { continue }
             for c in i..<(i + 3) {
                 rgba[c] = UInt8(min(255, (Int(rgba[c]) * 255 + a / 2) / a))
             }

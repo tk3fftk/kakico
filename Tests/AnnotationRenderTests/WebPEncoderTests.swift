@@ -89,11 +89,7 @@ final class WebPEncoderTests: XCTestCase {
 
     func testDimensionGuard() throws {
         // libwebp caps sides at 16383 (WEBP_MAX_DIMENSION).
-        let cs = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
-        let ctx = try XCTUnwrap(CGContext(data: nil, width: 16384, height: 1,
-                                          bitsPerComponent: 8, bytesPerRow: 0, space: cs,
-                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        let oversized = try XCTUnwrap(ctx.makeImage())
+        let oversized = try makeTestImage(width: 16384, height: 1)
         XCTAssertNil(WebPEncoder.encodeLossy(oversized, quality: 0.8))
     }
 
