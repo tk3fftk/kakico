@@ -11,7 +11,9 @@ let package = Package(
     ],
     dependencies: [
         // ImageIO cannot encode WebP, so WebP export uses libwebp.
-        .package(url: "https://github.com/SDWebImage/libwebp-Xcode.git", from: "1.5.0"),
+        // Pinned exactly: third-party fork of a CVE-prone C library, so new
+        // revisions should land only through a reviewed bump.
+        .package(url: "https://github.com/SDWebImage/libwebp-Xcode.git", exact: "1.5.0"),
     ],
     targets: [
         .target(name: "AnnotationModel"),
