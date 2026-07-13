@@ -32,14 +32,6 @@ final class ExportFormatTests: XCTestCase {
         XCTAssertEqual(ExportService.lastExportFormat, .png)
     }
 
-    func testExtensionMapping() {
-        XCTAssertEqual(ExportFormat(fromExtension: "png"), .png)
-        XCTAssertEqual(ExportFormat(fromExtension: "jpg"), .jpeg)
-        XCTAssertEqual(ExportFormat(fromExtension: "JPEG"), .jpeg)
-        XCTAssertEqual(ExportFormat(fromExtension: "webp"), .webp)
-        XCTAssertNil(ExportFormat(fromExtension: "gif"))
-    }
-
     func testUTTypeAndFilenameExtension() {
         XCTAssertEqual(ExportFormat.png.utType, .png)
         XCTAssertEqual(ExportFormat.jpeg.utType, .jpeg)

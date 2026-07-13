@@ -57,13 +57,9 @@ final class CanvasController {
         ]
     }
     private static let exportBoundsKey = "exportBounds"
-    var exportBounds: ExportBounds = {
-        if let raw = UserDefaults.standard.string(forKey: CanvasController.exportBoundsKey),
-           let value = ExportBounds(rawValue: raw) {
-            return value
-        }
-        return .expandToFit
-    }() {
+    var exportBounds: ExportBounds = UserDefaults.standard.rawRepresentable(
+        forKey: CanvasController.exportBoundsKey, default: .expandToFit
+    ) {
         didSet {
             UserDefaults.standard.set(exportBounds.rawValue, forKey: Self.exportBoundsKey)
         }

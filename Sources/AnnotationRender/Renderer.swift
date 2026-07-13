@@ -72,16 +72,17 @@ public enum Renderer {
     }
 
     /// Encodes a CGImage to PNG, JPEG, or WebP bytes. WebP goes through
-    /// libwebp (lossy, quality 80) because ImageIO cannot write it.
-    public static func encode(_ image: CGImage, as type: UTType, jpegQuality: CGFloat = 0.9) -> Data? {
+    /// libwebp (lossy) because ImageIO cannot write it; `quality` applies to
+    /// both lossy formats.
+    public static func encode(_ image: CGImage, as type: UTType, quality: CGFloat = 0.9) -> Data? {
         if type == .webP {
-            return WebPEncoder.encodeLossy(image)
+            return WebPEncoder.encodeLossy(image, quality: quality)
         }
         let data = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil) else {
             return nil
         }
-        let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: jpegQuality]
+        let props: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: quality]
         CGImageDestinationAddImage(dest, image, props as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return data as Data

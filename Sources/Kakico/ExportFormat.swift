@@ -29,13 +29,4 @@ enum ExportFormat: String, CaseIterable {
         case .webp: "WebP"
         }
     }
-
-    init?(fromExtension ext: String) {
-        switch ext.lowercased() {
-        case "png": self = .png
-        case "jpg", "jpeg": self = .jpeg
-        case "webp": self = .webp
-        default: return nil
-        }
-    }
 }

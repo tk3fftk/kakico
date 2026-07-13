@@ -45,22 +45,19 @@ enum ExportService {
 
     /// Last format chosen in the export panel; also its initial selection.
     static var lastExportFormat: ExportFormat {
-        get {
-            guard let raw = UserDefaults.standard.string(forKey: exportFormatKey),
-                  let format = ExportFormat(rawValue: raw) else { return .png }
-            return format
-        }
+        get { UserDefaults.standard.rawRepresentable(forKey: exportFormatKey, default: .png) }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: exportFormatKey) }
     }
 
     static func exportPanel(_ controller: CanvasController) {
         guard controller.hasDocument else { NSSound.beep(); return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [lastExportFormat.utType]
+        let format = lastExportFormat
+        panel.allowedContentTypes = [format.utType]
         panel.canCreateDirectories = true
         let base = controller.sourceURL?.deletingPathExtension().lastPathComponent ?? "annotated"
-        panel.nameFieldStringValue = "\(base).\(lastExportFormat.filenameExtension)"
-        let accessory = ExportFormatAccessory(selected: lastExportFormat)
+        panel.nameFieldStringValue = "\(base).\(format.filenameExtension)"
+        let accessory = ExportFormatAccessory(selected: format)
         accessory.onChange = { [weak panel] format in
             lastExportFormat = format
             // With a single allowed type the panel rewrites the typed
@@ -73,9 +70,9 @@ enum ExportService {
             // panel is on screen.
             _ = accessory
             guard response == .OK, let url = panel.url else { return }
-            let type = ExportFormat(fromExtension: url.pathExtension)?.utType
-                ?? lastExportFormat.utType
-            export(controller, to: url, as: type)
+            // With a single allowed type the panel forces the extension to
+            // match, so the selection is the format.
+            export(controller, to: url, as: lastExportFormat.utType)
         }
     }
 
