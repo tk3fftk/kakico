@@ -132,6 +132,15 @@ public struct TextElement: Codable, Equatable, Sendable, RectGeometry {
 public struct RedactionElement: Codable, Equatable, Sendable, RectGeometry {
     /// Default strengths for freshly created redactions.
     public static let defaultPixelateAmount: CGFloat = 14
+    /// Valid pixel-block-size range; scaled defaults are clamped to it.
+    public static let amountRange: ClosedRange<CGFloat> = 4...60
+
+    /// The default block size scaled to the canvas (like stroke widths); at
+    /// the reference canvas size this is `defaultPixelateAmount` itself.
+    public static func defaultAmount(forCanvasSize size: CGSize) -> CGFloat {
+        DefaultSizeScale.scaledDefault(reference: defaultPixelateAmount, clampedTo: amountRange,
+                                       forCanvasSize: size)
+    }
 
     public var id: ElementID
     public var rect: CGRect

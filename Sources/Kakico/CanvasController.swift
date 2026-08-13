@@ -19,24 +19,47 @@ final class CanvasController {
     var selection: ElementID? {
         didSet { syncToolStateFromSelection() }
     }
-    var tool: Tool = .arrow
+    var tool: Tool = .arrow {
+        didSet {
+            selection = nil
+            adoptStrokeWidthForTool()
+        }
+    }
     /// True while the inline text annotation editor is active; disables the
     /// unmodified single-letter tool shortcuts so they don't steal typing.
     var isEditingText = false
     var strokeColor: RGBAColor = .red {
         didSet { applyColorToSelection() }
     }
-    var strokeWidth: CGFloat = 6 {
-        didSet { applyStrokeWidthToSelection() }
+    var strokeWidth: CGFloat = DefaultStrokeWidth.segmentReferenceWidth {
+        didSet {
+            rememberStrokeWidth()
+            applyStrokeWidthToSelection()
+        }
+    }
+    /// Pixel block size for new pixelate elements; edits the selected pixelate
+    /// element when one is selected (mirrors `strokeWidth`).
+    var pixelateAmount: CGFloat = RedactionElement.defaultPixelateAmount {
+        didSet { applyPixelateAmountToSelection() }
+    }
+    /// Per-group stroke width memory: each tool family keeps its own width so
+    /// thick arrows don't force thick shape outlines. `strokeWidth` mirrors
+    /// the active group's value.
+    private var groupWidths = CanvasController.defaultGroupWidths(forCanvasSize: DefaultSizeScale.referenceCanvasSize)
+
+    /// The reference widths scaled and clamped to the canvas; at the reference
+    /// canvas size these are the reference widths themselves.
+    private static func defaultGroupWidths(forCanvasSize size: CGSize) -> [StrokeWidthGroup: CGFloat] {
+        [
+            .segment: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth, forCanvasSize: size),
+            .shape: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.shapeReferenceWidth, forCanvasSize: size),
+            .text: DefaultStrokeWidth.width(reference: DefaultStrokeWidth.segmentReferenceWidth, forCanvasSize: size),
+        ]
     }
     private static let exportBoundsKey = "exportBounds"
-    var exportBounds: ExportBounds = {
-        if let raw = UserDefaults.standard.string(forKey: CanvasController.exportBoundsKey),
-           let value = ExportBounds(rawValue: raw) {
-            return value
-        }
-        return .expandToFit
-    }() {
+    var exportBounds: ExportBounds = UserDefaults.standard.rawRepresentable(
+        forKey: CanvasController.exportBoundsKey, default: .expandToFit
+    ) {
         didSet {
             UserDefaults.standard.set(exportBounds.rawValue, forKey: Self.exportBoundsKey)
         }
@@ -107,6 +130,9 @@ final class CanvasController {
         document = Document(baseImage: ref, canvasSize: size)
         self.sourceURL = sourceURL
         selection = nil
+        groupWidths = Self.defaultGroupWidths(forCanvasSize: size)
+        pixelateAmount = RedactionElement.defaultAmount(forCanvasSize: size)
+        adoptStrokeWidthForTool()
         undoStack.removeAll()
         redoStack.removeAll()
         pendingCommitTask?.cancel()
@@ -196,8 +222,48 @@ final class CanvasController {
 
     // MARK: - Tool state ↔ selection
 
+    /// Swaps in the new tool's remembered stroke width. Runs under `isSyncing`
+    /// so switching tools neither edits a still-selected element nor writes
+    /// the adopted value back into a group.
+    private func adoptStrokeWidthForTool() {
+        guard let group = tool.strokeWidthGroup,
+              let width = groupWidths[group], width != strokeWidth else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        strokeWidth = width
+    }
+
+    /// Remembers a user-driven slider change in the width group it targets:
+    /// the selected element's group if there is a selection, else the current
+    /// tool's. Skipped while syncing (the value came *from* a group or an
+    /// element, not from the user).
+    private func rememberStrokeWidth() {
+        guard !isSyncing else { return }
+        if let sel = selection, let doc = document, let i = doc.index(of: sel) {
+            rememberWidth(strokeWidth, for: doc.elements[i].strokeWidthGroup ?? tool.strokeWidthGroup)
+        } else {
+            rememberWidth(strokeWidth, for: tool.strokeWidthGroup)
+        }
+    }
+
+    /// The single write path into `groupWidths`.
+    private func rememberWidth(_ width: CGFloat, for group: StrokeWidthGroup?) {
+        guard let group else { return }
+        groupWidths[group] = width
+    }
+
+    /// True when the size slider edits the pixelate block size instead of the
+    /// stroke width: the pixelate tool is active or a pixelate element is
+    /// selected.
+    var sliderEditsPixelateAmount: Bool {
+        if tool == .pixelate { return true }
+        guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return false }
+        return doc.elements[i].pixelateAmount != nil
+    }
+
     /// Adopts the selected element's stroke width and color so the controls
-    /// start from the current values (and new elements inherit them).
+    /// start from the current values (and new elements of its group inherit
+    /// them).
     private func syncToolStateFromSelection() {
         guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return }
         isSyncing = true
@@ -209,15 +275,36 @@ final class CanvasController {
         } else if let width = element.strokeWidth, width != strokeWidth {
             strokeWidth = width
         }
+        rememberWidth(strokeWidth, for: element.strokeWidthGroup)
         if let color = element.color, color != strokeColor { strokeColor = color }
+        if let amount = element.pixelateAmount, amount != pixelateAmount { pixelateAmount = amount }
     }
 
-    /// Applies the global stroke width to the selected element; no-op when the
-    /// value is unchanged (breaks the sync → apply feedback loop) or the
-    /// element has no stroke width. For text the width maps to the font point
-    /// size (same mapping as creation) and the box height is re-measured so
-    /// wrapped text doesn't get clipped. Undo boundaries are the caller's job
-    /// (the slider wraps drags in begin/commitInteraction).
+    /// Shared `didSet` hook for the tool-state properties (stroke width /
+    /// pixelate amount / color): writes `value` into the selected element
+    /// through `keyPath`, returning whether a write happened. No-op while
+    /// syncing (breaks the sync → apply feedback loop), without a selection,
+    /// when the element lacks the property (`nil` current), or when the value
+    /// is unchanged. `beforeWrite` runs after the guards pass and before the
+    /// document write (the color path opens its undo snapshot there).
+    @discardableResult
+    private func applyToSelection<Value: Equatable>(_ keyPath: WritableKeyPath<Annotation, Value?>,
+                                                    _ value: Value,
+                                                    beforeWrite: () -> Void = {}) -> Bool {
+        guard !isSyncing else { return false }
+        guard let sel = selection, let doc = document, let i = doc.index(of: sel),
+              let current = doc.elements[i][keyPath: keyPath],
+              current != value else { return false }
+        beforeWrite()
+        document?.elements[i][keyPath: keyPath] = value
+        return true
+    }
+
+    /// Applies the global stroke width to the selected element. For text the
+    /// width maps to the font point size (same mapping as creation) and the
+    /// box height is re-measured so wrapped text doesn't get clipped. Undo
+    /// boundaries are the caller's job (the slider wraps drags in
+    /// begin/commitInteraction).
     private func applyStrokeWidthToSelection() {
         guard !isSyncing else { return }
         guard let sel = selection, let doc = document, let i = doc.index(of: sel) else { return }
@@ -227,24 +314,26 @@ final class CanvasController {
             t.font.pointSize = pointSize
             t.size = Renderer.suggestedSize(for: t)
             document?.elements[i] = .text(t)
-        } else if let current = doc.elements[i].strokeWidth, current != strokeWidth {
-            document?.elements[i].strokeWidth = strokeWidth
+        } else {
+            applyToSelection(\.strokeWidth, strokeWidth)
         }
     }
 
-    /// Applies the global stroke color to the selected element; no-op when the
-    /// value is unchanged (breaks the sync → apply feedback loop) or the
-    /// element has no color. The color picker has no drag begin/end events, so
-    /// the undo boundary is debounced: changes within 500ms coalesce into one
-    /// undo step.
+    /// Applies the global pixelate amount to the selected element. Undo
+    /// boundaries are the caller's job (the slider wraps drags in
+    /// begin/commitInteraction).
+    private func applyPixelateAmountToSelection() {
+        applyToSelection(\.pixelateAmount, pixelateAmount)
+    }
+
+    /// Applies the global stroke color to the selected element. The color
+    /// picker has no drag begin/end events, so the undo boundary is debounced:
+    /// changes within 500ms coalesce into one undo step.
     private func applyColorToSelection() {
-        guard !isSyncing else { return }
-        guard let sel = selection,
-              let doc = document, let i = doc.index(of: sel),
-              let current = doc.elements[i].color,
-              current != strokeColor else { return }
-        if pendingCommitTask == nil { beginInteraction() }
-        document?.elements[i].color = strokeColor
+        let applied = applyToSelection(\.color, strokeColor) {
+            if pendingCommitTask == nil { beginInteraction() }
+        }
+        guard applied else { return }
         pendingCommitTask?.cancel()
         pendingCommitTask = Task {
             try? await Task.sleep(for: .milliseconds(500))

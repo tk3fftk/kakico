@@ -41,23 +41,57 @@ enum ExportService {
         controller.flashToast("Copied to clipboard")
     }
 
+    private static let exportFormatKey = "exportFormat"
+
+    /// Last format chosen in the export panel; also its initial selection.
+    static var lastExportFormat: ExportFormat {
+        get { UserDefaults.standard.rawRepresentable(forKey: exportFormatKey, default: .png) }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: exportFormatKey) }
+    }
+
     static func exportPanel(_ controller: CanvasController) {
         guard controller.hasDocument else { NSSound.beep(); return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png, .jpeg]
+        let format = lastExportFormat
+        panel.allowedContentTypes = [format.utType]
         panel.canCreateDirectories = true
         let base = controller.sourceURL?.deletingPathExtension().lastPathComponent ?? "annotated"
-        panel.nameFieldStringValue = "\(base).png"
+        panel.nameFieldStringValue = "\(base).\(format.filenameExtension)"
+        let accessory = ExportFormatAccessory(selected: format) { [weak panel] format in
+            // With a single allowed type the panel rewrites the typed
+            // extension to match.
+            panel?.allowedContentTypes = [format.utType]
+        }
+        panel.accessoryView = accessory
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            let ext = url.pathExtension.lowercased()
-            let type: UTType = (ext == "jpg" || ext == "jpeg") ? .jpeg : .png
-            export(controller, to: url, as: type)
+            // With a single allowed type the panel forces the extension to
+            // match, so the selection is the format. Persist it only on save
+            // so a cancelled panel doesn't rewrite the sticky default.
+            lastExportFormat = accessory.selected
+            export(controller, to: url, as: accessory.selected)
         }
     }
 
-    static func export(_ controller: CanvasController, to url: URL, as type: UTType) {
-        guard let cg = flatten(controller), let data = Renderer.encode(cg, as: type) else {
+    static func export(_ controller: CanvasController, to url: URL, as format: ExportFormat) {
+        // Some formats cap the pixel size (WebP: 16383 px per side); check
+        // before the expensive flatten so the user gets a reason instead of
+        // a silent failure.
+        if let limit = format.maxPixelDimension, let doc = controller.document {
+            let out = doc.outputRect(for: controller.exportBounds)
+            let pixelW = Int(out.width.rounded())
+            let pixelH = Int(out.height.rounded())
+            if max(pixelW, pixelH) > limit {
+                let alert = NSAlert()
+                alert.messageText = "Cannot export as \(format.displayName)"
+                alert.informativeText = "The image is \(pixelW) × \(pixelH) pixels, but "
+                    + "\(format.displayName) supports at most \(limit) pixels per side. "
+                    + "Choose a different format."
+                alert.runModal()
+                return
+            }
+        }
+        guard let cg = flatten(controller), let data = Renderer.encode(cg, as: format.utType) else {
             NSSound.beep(); return
         }
         do {
@@ -79,6 +113,12 @@ enum ExportService {
         return alert.runModal() == .alertFirstButtonReturn
     }
 
+    /// Ends any in-progress inline text editing by resigning the first
+    /// responder (fires textDidEndEditing → commitTextEditing).
+    static func commitPendingTextEditing() {
+        NSApp?.keyWindow?.makeFirstResponder(nil)
+    }
+
     /// Pastes an image from the clipboard, asking for confirmation first when a
     /// document is already open. Returns true if a new image was loaded.
     @discardableResult
@@ -95,9 +135,9 @@ enum ExportService {
                 confirmTitle: "Replace"
             ) else { return false }
         }
-        // End any in-progress inline text editing (fires textDidEndEditing →
-        // commitTextEditing) so the editor doesn't linger over the new document.
-        NSApp.keyWindow?.makeFirstResponder(nil)
+        // Commit inline text editing so the editor doesn't linger over the
+        // new document.
+        commitPendingTextEditing()
         return controller.pasteImage()
     }
 
@@ -110,46 +150,38 @@ enum ExportService {
             controller.loadImage(at: url)
         }
     }
+}
 
-    // MARK: Native document format (.kakico — JSON package with embedded PNG)
+/// "Format:" popup shown as the export save panel's accessory view.
+/// Being the view itself, `panel.accessoryView` keeps the target/action
+/// wiring alive for the panel's lifetime.
+private final class ExportFormatAccessory: NSStackView {
+    private(set) var selected: ExportFormat
+    private let onChange: (ExportFormat) -> Void
+    private let popup: NSPopUpButton
 
-    static func saveDocument(_ controller: CanvasController) {
-        guard var doc = controller.document, let cg = controller.baseImage else { NSSound.beep(); return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: "kakico") ?? .json]
-        panel.nameFieldStringValue = "untitled.kakico"
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            // Embed the base image so the document is self-contained.
-            if let png = Renderer.encode(cg, as: .png) {
-                doc.baseImage = .pngData(png)
-            }
-            do {
-                let data = try JSONEncoder().encode(doc)
-                try data.write(to: url)
-            } catch {
-                NSAlert(error: error).runModal()
-            }
+    init(selected: ExportFormat, onChange: @escaping (ExportFormat) -> Void) {
+        self.selected = selected
+        self.onChange = onChange
+        popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        for format in ExportFormat.allCases {
+            popup.addItem(withTitle: format.displayName)
         }
+        popup.selectItem(at: ExportFormat.allCases.firstIndex(of: selected) ?? 0)
+        super.init(frame: .zero)
+        addArrangedSubview(NSTextField(labelWithString: "Format:"))
+        addArrangedSubview(popup)
+        orientation = .horizontal
+        edgeInsets = NSEdgeInsets(top: 8, left: 20, bottom: 8, right: 20)
+        popup.target = self
+        popup.action = #selector(selectionChanged)
     }
 
-    static func openDocument(_ controller: CanvasController) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: "kakico") ?? .json]
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                let data = try Data(contentsOf: url)
-                let doc = try JSONDecoder().decode(Document.self, from: data)
-                guard case .pngData(let png) = doc.baseImage,
-                      let cg = ImageLoader.cgImage(from: png) else {
-                    NSSound.beep(); return
-                }
-                controller.loadImage(cg)
-                controller.document = doc
-            } catch {
-                NSAlert(error: error).runModal()
-            }
-        }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    @objc private func selectionChanged() {
+        selected = ExportFormat.allCases[popup.indexOfSelectedItem]
+        onChange(selected)
     }
 }

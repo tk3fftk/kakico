@@ -20,6 +20,108 @@ func rgbaColor(from color: Color) -> RGBAColor {
 // MARK: - Content
 
 struct ContentView: View {
+    var workspace: WorkspaceController
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TabBarView(workspace: workspace)
+            CanvasPane(controller: workspace.active)
+                // Fresh view tree per tab: resets CanvasNSView pan/drag state,
+                // the inline text editor, and transient popover @State.
+                .id(workspace.active.id)
+        }
+    }
+}
+
+// MARK: - Tab bar
+
+struct TabBarView: View {
+    var workspace: WorkspaceController
+    @Environment(\.colorScheme) private var scheme
+
+    private static let barHeight: CGFloat = 30
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(workspace.tabs) { tab in
+                TabItem(
+                    title: WorkspaceController.title(for: tab),
+                    isActive: tab === workspace.active,
+                    select: { workspace.activate(tab) },
+                    close: { workspace.close(tab) }
+                )
+                Rectangle().fill(Color.miroDivider).frame(width: 1)
+            }
+            Button { workspace.newTab() } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(MiroTheme.textSecondary(scheme))
+                    .frame(width: 34, height: Self.barHeight)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(MiroTileButtonStyle())
+            .help("New Tab (⌘T)")
+        }
+        .frame(height: Self.barHeight)
+        .background(MiroTheme.surface(scheme))
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.miroDivider).frame(height: 1)
+        }
+    }
+}
+
+private struct TabItem: View {
+    let title: String
+    let isActive: Bool
+    let select: () -> Void
+    let close: () -> Void
+    @Environment(\.colorScheme) private var scheme
+    @State private var hovering = false
+
+    private var backgroundColor: Color {
+        if isActive {
+            MiroTheme.board(scheme)
+        } else if hovering {
+            Color.miroSurfacePressed.opacity(scheme == .dark ? 0.3 : 1)
+        } else {
+            .clear
+        }
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.miroCaption)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .foregroundStyle(isActive ? MiroTheme.textPrimary(scheme)
+                                      : MiroTheme.textSecondary(scheme))
+            .padding(.horizontal, 28) // symmetric room for the close button
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(backgroundColor)
+            .overlay(alignment: .leading) {
+                if hovering || isActive {
+                    Button(action: close) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(MiroTheme.textSecondary(scheme))
+                            .frame(width: 18, height: 18)
+                            .contentShape(.rect(cornerRadius: 5))
+                    }
+                    .buttonStyle(MiroTileButtonStyle())
+                    .padding(.leading, 6)
+                    .help("Close Tab (⌘W)")
+                }
+            }
+            .contentShape(.rect)
+            .onTapGesture(perform: select)
+            .onHover { hovering = $0 }
+            .help(title)
+    }
+}
+
+/// One tab's content: board + grid + canvas/empty state plus all floating
+/// overlays, all bound to that tab's controller.
+private struct CanvasPane: View {
     var controller: CanvasController
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -168,7 +270,9 @@ struct ToolPalette: View {
     }
 
     private var palette: some View {
-        VStack(spacing: 4) {
+        let editsPixelate = controller.sliderEditsPixelateAmount
+        let sliderSymbol = editsPixelate ? Tool.pixelate.symbol : "lineweight"
+        return VStack(spacing: 4) {
             ForEach(Tool.allCases) { tool in
                 Button {
                     if reduceMotion {
@@ -207,17 +311,17 @@ struct ToolPalette: View {
             Button {
                 showsStrokeWidth.toggle()
             } label: {
-                tileIcon("lineweight", tint: MiroTheme.textSecondary(scheme))
+                tileIcon(sliderSymbol, tint: MiroTheme.textSecondary(scheme))
             }
             .buttonStyle(MiroTileButtonStyle())
-            .help("Stroke width")
+            .help(editsPixelate ? "Pixel size" : "Stroke width")
             .popover(isPresented: $showsStrokeWidth, arrowEdge: .trailing) {
                 HStack(spacing: 8) {
-                    Image(systemName: "lineweight")
+                    Image(systemName: sliderSymbol)
                         .foregroundStyle(MiroTheme.textSecondary(scheme))
                     MiroSlider(
-                        value: $controller.strokeWidth,
-                        range: 1...40,
+                        value: editsPixelate ? $controller.pixelateAmount : $controller.strokeWidth,
+                        range: editsPixelate ? RedactionElement.amountRange : DefaultStrokeWidth.range,
                         onEditingChanged: { editing in
                             if editing { controller.beginInteraction() } else { controller.commitInteraction() }
                         },

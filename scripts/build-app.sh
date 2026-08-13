@@ -23,6 +23,15 @@ cp "$BIN" "$APP/Contents/MacOS/Kakico"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
+ICON_SRC="$ROOT/Resources/AppIcon.icns"
+if [[ -f "$ICON_SRC" ]]; then
+    echo "==> copying AppIcon.icns"
+    cp "$ICON_SRC" "$APP/Contents/Resources/AppIcon.icns"
+else
+    echo "warning: $ICON_SRC not found" >&2
+fi
+
+
 # Optional release version stamp (VERSION env var or 2nd arg, "v" prefix tolerated).
 # Must happen before codesign: editing Info.plist afterwards breaks the seal.
 VERSION="${VERSION:-${2:-}}"

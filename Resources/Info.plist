@@ -24,6 +24,10 @@
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.graphics-design</string>
     <key>CFBundleDocumentTypes</key>
@@ -36,16 +40,6 @@
             <key>LSItemContentTypes</key>
             <array>
                 <string>public.image</string>
-            </array>
-        </dict>
-        <dict>
-            <key>CFBundleTypeName</key>
-            <string>Kakico Document</string>
-            <key>CFBundleTypeRole</key>
-            <string>Editor</string>
-            <key>CFBundleTypeExtensions</key>
-            <array>
-                <string>kakico</string>
             </array>
         </dict>
     </array>
