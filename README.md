@@ -1,24 +1,18 @@
 # Kakico
 
-A native **Apple Silicon (arm64)** screenshot-annotation app for macOS, written in
-Swift (SwiftUI shell + AppKit canvas, Core Graphics / Core Image rendering).
+![](https://github.com/user-attachments/assets/dcf8325a-cc4f-4c60-bd5a-a1bee41d629b)
 
+Kakico is a native **Apple Silicon (arm64)** screenshot-annotation app for macOS, written in
+Swift (SwiftUI shell + AppKit canvas, Core Graphics / Core Image rendering). Kakico aims to be a modern Skitch alternative.
 
 ## What it does
 
-Open or paste an image, mark it up, and export:
+Open or paste an image, mark it up, and export (shortcuts shown in parentheses):
 
-- **Tools:** arrow, line, rectangle, ellipse, text (inline editing), stamp
-  (check / cross / star / exclaim / heart), pixelate, blur, and crop.
-- **Editing:** select/move/resize via handles, undo/redo, delete.
-- **Crop:** drag a crop rect (marching ants), re-edit it via corner handles or by
-  dragging it around; `Return` applies it destructively (undoable), `Esc` cancels.
-  Export honors a pending crop without applying it.
-- **Output:** export PNG/JPEG, copy to clipboard, and drag-out as a PNG file
-  (`NSFilePromiseProvider`).
-
-Screen capture is intentionally out of scope — feed it images from macOS's built-in
-Screenshot (⇧⌘4), Finder drag-drop, or paste.
+- **Tools:** Arrow (`A`), Line (`L`), Rectangle (`R`), Ellipse (`O`), Text (`T`), Pixelate (`P`), and Crop (`C`).
+- **Editing:** Select/move/resize via handles, Undo (`Cmd+Z`), Redo (`Cmd+Shift+Z`), and Delete.
+- **Output:** Export as PNG, JPEG, or lossy WebP; copy to clipboard (`Cmd+C`), and drag out as a PNG file.
+- **Tabs:** Open tab (`Cmd+T`) and close tab (`Cmd+W`) and move tab (`Opt+Cmd+←/→`). Edit multiple images in separate tabs without losing active work.
 
 ## Install
 
@@ -30,34 +24,13 @@ brew install --cask kakico
 Requires macOS 15+ on Apple Silicon. The app is ad-hoc signed (not notarized);
 the cask removes the quarantine attribute on install so it opens normally.
 
-## Build & run
+## Build & Run
 
 ```sh
-swift test                       # run unit tests (model + renderer)
-./scripts/build-app.sh release   # build & assemble an ad-hoc-signed Kakico.app
+swift test                       # Run unit tests (model + renderer)
+./scripts/build-app.sh release   # Build & assemble an ad-hoc-signed Kakico.app
 open build/Kakico.app
 ```
 
 Requirements: macOS 15+, Xcode/Swift toolchain. The build script produces a native
 arm64, ad-hoc-signed bundle (no Apple Developer account required).
-
-## Architecture
-
-- `AnnotationModel` (SwiftPM library, no UI deps) — value-type `Annotation` enum,
-  `Document`, geometry/hit-testing, handles. Unit-tested headless.
-- `AnnotationRender` (SwiftPM library) — one pure renderer used by both the on-screen
-  canvas and file/clipboard export, so what you see equals what you get; pixelate/blur
-  via Core Image.
-- `Kakico` (executable) — SwiftUI app shell + AppKit `CanvasNSView` (mouse tracking,
-  handles, crop overlay, inline text editing) + export/clipboard/drag-out services.
-
-## Provenance / clean-room notice
-
-This is an **independent, clean-room reimplementation** of a generic screenshot-annotation
-workflow. It is **not affiliated with, derived from, or endorsed by Evernote or Skitch**.
-
-No source code, artwork, icons, trademarks, or file formats were copied from Skitch.app.
-All code and stamp artwork here are original. Runtime metadata from the old binary was
-consulted only to enumerate *which features the workflow needed* — never as source to
-translate. "Skitch" is a trademark of its respective owner and is not used as this
-product's name.
