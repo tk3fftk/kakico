@@ -122,6 +122,18 @@ final class CanvasController {
         load(image: image, sourceURL: sourceURL)
     }
 
+    /// Loads the first readable image among dropped payloads; beeps if none.
+    @discardableResult
+    func loadDroppedImage(_ items: [DroppedImage]) -> Bool {
+        for item in items {
+            guard let image = item.cgImage else { continue }
+            load(image: image, sourceURL: item.sourceURL)
+            return true
+        }
+        NSSound.beep()
+        return false
+    }
+
     private func load(image: CGImage, sourceURL: URL?) {
         let size = CGSize(width: image.width, height: image.height)
         let ref: ImageRef

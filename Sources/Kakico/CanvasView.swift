@@ -89,7 +89,6 @@ final class CanvasNSView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        registerForDraggedTypes([.fileURL, .png, .tiff])
         // Selector-based observers are auto-unregistered on dealloc.
         NotificationCenter.default.addObserver(
             self, selector: #selector(appDidResignActive),
@@ -615,26 +614,6 @@ final class CanvasNSView: NSView {
         }
     }
 
-    // MARK: Drag & drop import
-
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
-
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let pb = sender.draggingPasteboard
-        if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingContentsConformToTypes: ["public.image"]]) as? [URL],
-           let url = urls.first {
-            controller?.loadImage(at: url)
-            refresh()
-            return true
-        }
-        if let objs = pb.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
-           let img = objs.first?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            controller?.loadImage(img)
-            refresh()
-            return true
-        }
-        return false
-    }
 }
 
 // MARK: - Inline text editing

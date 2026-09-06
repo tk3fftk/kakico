@@ -147,6 +147,12 @@ private struct CanvasPane: View {
                 EmptyState(controller: controller)
             }
         }
+        // Drop lives on the whole pane so it works before an image is loaded
+        // (the empty state invites it) as well as over a loaded canvas, where
+        // a drop replaces the image.
+        .dropDestination(for: DroppedImage.self) { items, _ in
+            controller.loadDroppedImage(items)
+        }
         .overlay(alignment: .leading) {
             if controller.hasDocument {
                 ToolPalette(controller: controller)
