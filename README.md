@@ -24,6 +24,23 @@ brew install --cask kakico
 Requires macOS 15+ on Apple Silicon. The app is ad-hoc signed (not notarized);
 the cask removes the quarantine attribute on install so it opens normally.
 
+## Development & Contributions
+
+Kakico is a personal project I built for my own use. Its features and design
+reflect what works best for me in my day-to-day workflow.
+
+With that in mind, this repository's GitHub settings limit pull requests
+to collaborators only.
+Feature requests are welcome through Issues, though I cannot promise
+that every suggestion will be implemented. Thank you for your understanding
+and interest in the project.
+
+## License
+
+Kakico is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+Please refer to the license for the terms governing use, modification,
+and distribution.
+
 ## Build & Run
 
 ```sh
