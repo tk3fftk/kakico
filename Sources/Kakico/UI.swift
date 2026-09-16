@@ -246,6 +246,20 @@ private func tileIcon(_ symbol: String, tint: Color,
         .contentShape(.rect(cornerRadius: 11))
 }
 
+@ViewBuilder
+private func toolTileIcon(_ tool: Tool, tint: Color,
+                          iconSize: CGFloat = 20, tile: CGFloat = 40) -> some View {
+    if tool == .text {
+        Text("あA")
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: tile, height: tile)
+            .contentShape(.rect(cornerRadius: 11))
+    } else {
+        tileIcon(tool.symbol, tint: tint, iconSize: iconSize, tile: tile)
+    }
+}
+
 /// Horizontal hairline separating groups inside a floating panel.
 private func paletteDivider(width: CGFloat, verticalPadding: CGFloat) -> some View {
     Rectangle()
@@ -287,8 +301,8 @@ struct ToolPalette: View {
                         withAnimation(.easeOut(duration: 0.12)) { controller.tool = tool }
                     }
                 } label: {
-                    tileIcon(tool.symbol,
-                             tint: controller.tool == tool ? Color.miroInk : MiroTheme.textSecondary(scheme))
+                    toolTileIcon(tool,
+                                 tint: controller.tool == tool ? Color.miroInk : MiroTheme.textSecondary(scheme))
                         .background(
                             RoundedRectangle(cornerRadius: 11)
                                 .fill(controller.tool == tool ? Color.miroYellow : .clear)

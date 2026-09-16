@@ -392,7 +392,7 @@ withAnimation(.easeOut(duration: 0.12)) { active = i }
 | Sticky note tool | `square.fill` (custom rounded) | 20pt |
 | Pen tool | `pencil.tip` | 20pt |
 | Shapes tool | `square.on.circle` | 20pt |
-| Text tool | `textformat` | 20pt |
+| Text tool | Custom `あA` (`textformat` fallback) | 16pt semibold |
 | Frame tool | `rectangle.dashed` | 20pt |
 | Comment tool | `bubble.left` | 20pt |
 | More tool | `plus` | 20pt |
