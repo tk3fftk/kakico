@@ -130,42 +130,70 @@ public enum Renderer {
         ctx.setFillColor(red: color.r, green: color.g, blue: color.b, alpha: color.a)
     }
 
+    /// Draws a soft drop shadow whose size follows the element's stroke width.
+    /// CGContext shadows use device-space dimensions, so scale the offset and
+    /// blur to keep their appearance consistent at every render scale. Drawing
+    /// in a transparency layer makes a filled and stroked shape cast one shadow.
+    static func withShadow(forStrokeWidth width: CGFloat, in ctx: CGContext, _ body: () -> Void) {
+        let ctm = ctx.ctm
+        let deviceScale = sqrt(abs(ctm.a * ctm.d - ctm.b * ctm.c))
+        let drop = max(1.5, width * 0.35) * deviceScale
+        let blur = max(1.5, width * 0.5) * deviceScale
+        ctx.saveGState()
+        // Base space is y-up in each renderer context, so negative height
+        // offsets the shadow down in the resulting image.
+        ctx.setShadow(offset: CGSize(width: drop * 0.4, height: -drop), blur: blur,
+                      color: CGColor(gray: 0, alpha: 0.45))
+        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+        body()
+        ctx.endTransparencyLayer()
+        ctx.restoreGState()
+    }
+
     private static func drawLine(_ e: SegmentElement, in ctx: CGContext) {
-        setStroke(ctx, e.color, e.width)
-        ctx.beginPath()
-        ctx.move(to: e.start)
-        ctx.addLine(to: e.end)
-        ctx.strokePath()
+        withShadow(forStrokeWidth: e.width, in: ctx) {
+            setStroke(ctx, e.color, e.width)
+            ctx.beginPath()
+            ctx.move(to: e.start)
+            ctx.addLine(to: e.end)
+            ctx.strokePath()
+        }
     }
 
     private static func drawArrow(_ e: SegmentElement, in ctx: CGContext) {
         // Skitch-style arrow: one filled polygon (tapered shaft + barbed head).
         let outline = e.arrowOutline()
         guard let first = outline.first else { return }
-        setFill(ctx, e.color)
-        ctx.beginPath()
-        ctx.move(to: first)
-        for p in outline.dropFirst() { ctx.addLine(to: p) }
-        ctx.closePath()
-        ctx.fillPath()
+        withShadow(forStrokeWidth: e.width, in: ctx) {
+            setFill(ctx, e.color)
+            ctx.beginPath()
+            ctx.move(to: first)
+            for p in outline.dropFirst() { ctx.addLine(to: p) }
+            ctx.closePath()
+            ctx.fillPath()
+        }
     }
 
     private static func drawRect(_ e: ShapeElement, in ctx: CGContext) {
-        if let fill = e.fill {
-            setFill(ctx, fill)
-            ctx.fill(e.rect)
+        withShadow(forStrokeWidth: e.width, in: ctx) {
+            if let fill = e.fill {
+                setFill(ctx, fill)
+                ctx.fill(e.rect)
+            }
+            setStroke(ctx, e.color, e.width)
+            ctx.stroke(e.rect)
         }
-        setStroke(ctx, e.color, e.width)
-        ctx.stroke(e.rect)
     }
 
     private static func drawEllipse(_ e: ShapeElement, in ctx: CGContext) {
-        if let fill = e.fill {
-            setFill(ctx, fill)
-            ctx.fillEllipse(in: e.rect)
+        withShadow(forStrokeWidth: e.width, in: ctx) {
+            if let fill = e.fill {
+                setFill(ctx, fill)
+                ctx.fillEllipse(in: e.rect)
+            }
+            setStroke(ctx, e.color, e.width)
+            ctx.strokeEllipse(in: e.rect)
         }
-        setStroke(ctx, e.color, e.width)
-        ctx.strokeEllipse(in: e.rect)
     }
 
     private static func attributedString(for e: TextElement) -> NSAttributedString {
