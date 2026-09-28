@@ -104,6 +104,56 @@ final class AnnotationRenderTests: XCTestCase {
         XCTAssertNotEqual(pixelHash(plain), pixelHash(annotated))
     }
 
+    // MARK: - Drop shadows
+
+    /// A stroke on white leaves a neutral dark band below it, not above it.
+    func testStrokedElementsCastShadowBelow() {
+        let base = solidImage(CGSize(width: 100, height: 100), color: (1, 1, 1))
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 100))
+        doc.add(.line(SegmentElement(start: CGPoint(x: 20, y: 30), end: CGPoint(x: 80, y: 30), color: .red, width: 6)))
+        let out = Renderer.flatten(doc, baseImage: base, scale: 1)!
+
+        let below = samplePixel(out, x: 50, y: 36)
+        XCTAssertLessThan(below.r + below.g + below.b, 720, "expected a shadow band below the stroke")
+        XCTAssertEqual(below.r, below.g, accuracy: 3, "shadow should be neutral, not tinted")
+
+        let above = samplePixel(out, x: 50, y: 18)
+        XCTAssertEqual(above.r + above.g + above.b, 765, "no shadow expected well above the stroke")
+    }
+
+    /// The same model-space shadow point should look similar in a 2x export.
+    func testShadowScalesWithExportScale() {
+        let base = solidImage(CGSize(width: 100, height: 100), color: (1, 1, 1))
+        var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 100))
+        doc.add(.line(SegmentElement(start: CGPoint(x: 20, y: 30), end: CGPoint(x: 80, y: 30), color: .red, width: 6)))
+        let one = Renderer.flatten(doc, baseImage: base, scale: 1)!
+        let two = Renderer.flatten(doc, baseImage: base, scale: 2)!
+
+        let at1 = samplePixel(one, x: 50, y: 36)
+        let at2 = samplePixel(two, x: 100, y: 72)
+        XCTAssertEqual(at1.r, at2.r, accuracy: 12)
+        XCTAssertLessThan(at2.r + at2.g + at2.b, 720)
+    }
+
+    func testShadowIsPresentOnAllStrokedKinds() {
+        let base = solidImage(CGSize(width: 100, height: 100), color: (1, 1, 1))
+        let kinds: [(String, Annotation)] = [
+            ("arrow", .arrow(SegmentElement(start: CGPoint(x: 10, y: 30), end: CGPoint(x: 90, y: 30), color: .red, width: 6))),
+            ("rectangle", .rectangle(ShapeElement(rect: CGRect(x: 20, y: 10, width: 60, height: 20), color: .red, width: 6))),
+            ("ellipse", .ellipse(ShapeElement(rect: CGRect(x: 20, y: 10, width: 60, height: 20), color: .red, width: 6))),
+        ]
+        for (name, element) in kinds {
+            var doc = Document(baseImage: .pngData(Data()), canvasSize: CGSize(width: 100, height: 100))
+            doc.add(element)
+            let out = Renderer.flatten(doc, baseImage: base, scale: 1)!
+            let shadowed = (34...42).contains { y in
+                let p = samplePixel(out, x: 50, y: y)
+                return p.r + p.g + p.b < 740 && abs(p.r - p.g) <= 3
+            }
+            XCTAssertTrue(shadowed, "\(name) should cast a shadow below its bottom edge")
+        }
+    }
+
     // MARK: - Redaction render cache
 
     /// Per-pixel gradient: unlike a solid or two-band image, every pixelate
