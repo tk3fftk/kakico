@@ -115,13 +115,13 @@ private final class DragExportDelegate: NSObject, NSFilePromiseProviderDelegate,
     }
 
     nonisolated func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider,
-                                        fileNameForType fileType: String) -> String {
+                                         fileNameForType fileType: String) -> String {
         fileName
     }
 
     nonisolated func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider,
-                                        writePromiseTo url: URL,
-                                        completionHandler: @escaping (Error?) -> Void) {
+                                         writePromiseTo url: URL,
+                                         completionHandler: @escaping (Error?) -> Void) {
         do {
             try data.write(to: url)
         } catch {
