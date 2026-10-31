@@ -542,7 +542,7 @@ struct ZoomMenuButton: View {
 /// Bottom-right badge showing the exported image size in pixels; during a
 /// pending crop it also shows the original size in parentheses.
 struct ImageSizeBadge: View {
-    var document: Document
+    var document: AnnotationModel.Document
     var exportBounds: ExportBounds
     @Environment(\.colorScheme) private var scheme
 
