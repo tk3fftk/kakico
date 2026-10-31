@@ -578,10 +578,8 @@ struct DragOutWell: NSViewRepresentable {
     }
 }
 
-final class DragOutView: NSView, NSFilePromiseProviderDelegate, NSDraggingSource {
+final class DragOutView: NSView, NSDraggingSource {
     weak var controller: CanvasController?
-    nonisolated(unsafe) private var pendingData: Data?
-    private let ioQueue = OperationQueue()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -603,8 +601,8 @@ final class DragOutView: NSView, NSFilePromiseProviderDelegate, NSDraggingSource
     override func mouseDown(with event: NSEvent) {
         guard let controller, controller.hasDocument,
               let data = ExportService.pngData(controller) else { return }
-        pendingData = data
-        let provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: self)
+        let base = controller.sourceURL?.deletingPathExtension().lastPathComponent ?? "annotated"
+        let provider = DragExportProvider(data: data, fileName: "\(base).png")
         let item = NSDraggingItem(pasteboardWriter: provider)
         let preview = NSImage(data: data) ?? NSImage()
         item.setDraggingFrame(bounds, contents: preview)
@@ -614,26 +612,6 @@ final class DragOutView: NSView, NSFilePromiseProviderDelegate, NSDraggingSource
     // NSDraggingSource
     func draggingSession(_ session: NSDraggingSession,
                          sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
-
-    // NSFilePromiseProviderDelegate
-    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider,
-                             fileNameForType fileType: String) -> String {
-        let base = controller?.sourceURL?.deletingPathExtension().lastPathComponent ?? "annotated"
-        return "\(base).png"
-    }
-
-    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider,
-                             writePromiseTo url: URL,
-                             completionHandler: @escaping (Error?) -> Void) {
-        do {
-            if let data = pendingData { try data.write(to: url) }
-            completionHandler(nil)
-        } catch {
-            completionHandler(error)
-        }
-    }
-
-    func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue { ioQueue }
 }
 
 extension NSImage {
