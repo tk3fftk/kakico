@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 env:
-  SWIFTLINT_VERSION: "0.63.3"
-  SWIFTLINT_SHA256: "26db741d43f2f2dc26c0cf16911100a3e186c3d1dbb59e55ad3ac87b0de4538f"
+  SWIFTLINT_VERSION: "0.65.1"
+  SWIFTLINT_SHA256: "caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d"
 
 jobs:
   swiftlint:

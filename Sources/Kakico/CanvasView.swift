@@ -71,7 +71,7 @@ final class CanvasNSView: NSView {
     private var flattened: CGImage?
     // Cache key for `flattened`: re-render only when the content it shows
     // (document sans crop + base image) actually changes, not on every redraw.
-    private var flattenedKey: Document?
+    private var flattenedKey: AnnotationModel.Document?
     private var flattenedBase: CGImage?
     private var flattenedBounds: ExportBounds?
     // Controller's documentVersion at the last cache check; lets draw() skip
@@ -158,7 +158,7 @@ final class CanvasNSView: NSView {
         }
     }
 
-    private var displayDocument: Document? {
+    private var displayDocument: AnnotationModel.Document? {
         guard var doc = controller?.document else { return nil }
         doc.crop = nil
         return doc

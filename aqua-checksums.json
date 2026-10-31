@@ -1,23 +1,23 @@
 {
   "checksums": [
     {
-      "id": "github_release/github.com/realm/SwiftLint/0.63.3/portable_swiftlint.zip",
-      "checksum": "FB045E85E7CB3374F42A4840B6B85A0106302AFA69035C0C6F29AF4A44C810B6",
+      "id": "github_release/github.com/realm/SwiftLint/0.65.1/portable_swiftlint.zip",
+      "checksum": "C1E429B0599CF1B516F369A2D9EC04EAF0E436F3C12B637DF8851FA52FF694D0",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/realm/SwiftLint/0.63.3/swiftlint_linux_amd64.zip",
-      "checksum": "26DB741D43F2F2DC26C0CF16911100A3E186C3D1DBB59E55AD3AC87B0DE4538F",
+      "id": "github_release/github.com/realm/SwiftLint/0.65.1/swiftlint_linux_amd64.zip",
+      "checksum": "CAEED6F4A679C35539FFAF124F6C4AB4A8416917F7D8796279DC52B74026059D",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/realm/SwiftLint/0.63.3/swiftlint_linux_arm64.zip",
-      "checksum": "D5EFCBED5EC1CA9EB7F833DFDD9F80F56289750B72582C7C1686B4528E182454",
+      "id": "github_release/github.com/realm/SwiftLint/0.65.1/swiftlint_linux_arm64.zip",
+      "checksum": "9FFA52F478E6D8EB485D37D14715FFAC90ABC81C58F3370D598BF75BE05605F8",
       "algorithm": "sha256"
     },
     {
-      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.527.0/registry.yaml",
-      "checksum": "55A37D408529F4CCEAD32348C177BA59FDD726C856AE4503C026B086A164BC53ADBDDAC89F2B4D219FBC5F4522D9D15DCB4D8923CE338ECE62640E736E8FB19E",
+      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.579.0/registry.yaml",
+      "checksum": "65F9E557DA96D35358579B7D4E165889D4FBE9194F597E77AAE3FA59CCCB4BD31C9E5D32546561B87F906D9BCE5FE44EF01CAD00A03F8456D82BEC1DFE4F7C97",
       "algorithm": "sha512"
     }
   ]
