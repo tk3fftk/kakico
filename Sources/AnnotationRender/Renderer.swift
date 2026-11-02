@@ -134,7 +134,8 @@ public enum Renderer {
     /// CGContext shadows use device-space dimensions, so scale the offset and
     /// blur to keep their appearance consistent at every render scale. Drawing
     /// in a transparency layer makes a filled and stroked shape cast one shadow.
-    static func withShadow(forStrokeWidth width: CGFloat, in ctx: CGContext, _ body: () -> Void) {
+    private static func withShadow(forStrokeWidth width: CGFloat, layerBounds: CGRect? = nil,
+                                   in ctx: CGContext, _ body: () -> Void) {
         let ctm = ctx.ctm
         let deviceScale = sqrt(abs(ctm.a * ctm.d - ctm.b * ctm.c))
         let drop = max(1.5, width * 0.35) * deviceScale
@@ -144,9 +145,18 @@ public enum Renderer {
         // offsets the shadow down in the resulting image.
         ctx.setShadow(offset: CGSize(width: drop * 0.4, height: -drop), blur: blur,
                       color: CGColor(gray: 0, alpha: 0.45))
-        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-        body()
-        ctx.endTransparencyLayer()
+        if let layerBounds {
+            // Include stroke coverage (supplied by the caller), antialiasing,
+            // and a conservative blur/offset margin in model coordinates.
+            let margin = max(1.5, width * 0.5) * 3 + max(1.5, width * 0.35) + 2
+            ctx.beginTransparencyLayer(in: layerBounds.insetBy(dx: -margin, dy: -margin),
+                                       auxiliaryInfo: nil)
+            body()
+            ctx.endTransparencyLayer()
+        } else {
+            // A single fill/stroke already casts one shadow; no group needed.
+            body()
+        }
         ctx.restoreGState()
     }
 
@@ -175,7 +185,8 @@ public enum Renderer {
     }
 
     private static func drawRect(_ e: ShapeElement, in ctx: CGContext) {
-        withShadow(forStrokeWidth: e.width, in: ctx) {
+        withShadow(forStrokeWidth: e.width,
+                   layerBounds: e.rect.insetBy(dx: -e.width / 2, dy: -e.width / 2), in: ctx) {
             if let fill = e.fill {
                 setFill(ctx, fill)
                 ctx.fill(e.rect)
@@ -186,7 +197,8 @@ public enum Renderer {
     }
 
     private static func drawEllipse(_ e: ShapeElement, in ctx: CGContext) {
-        withShadow(forStrokeWidth: e.width, in: ctx) {
+        withShadow(forStrokeWidth: e.width,
+                   layerBounds: e.rect.insetBy(dx: -e.width / 2, dy: -e.width / 2), in: ctx) {
             if let fill = e.fill {
                 setFill(ctx, fill)
                 ctx.fillEllipse(in: e.rect)
