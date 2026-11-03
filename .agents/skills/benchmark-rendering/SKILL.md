@@ -1,22 +1,22 @@
 ---
 name: benchmark-rendering
-description: Kakicoの描画性能をReleaseビルドで比較するプロジェクトSkill。描画ベンチマーク、キャッシュ描画の計測、brew版と作業ツリーの性能比較を依頼されたときに使用する。
+description: Project skill for comparing Kakico rendering performance in release builds. Use for rendering benchmarks, cached-rendering measurements, and performance comparisons between a Homebrew version and the working tree.
 ---
 
-# 描画ベンチマーク
+# Rendering Benchmarks
 
-リポジトリルートで `bash scripts/benchmark-rendering.sh` を実行する。
-標準ではbrewのインストール情報とアプリのバージョンを照合し、対応するローカルタグのソースを比較元にする。
-比較元の指定がある場合は `bash scripts/benchmark-rendering.sh --baseline-ref <ref>` を使う。この場合brewは不要。
-必要環境と実行方法はルートのREADMEを参照する。AIサービスへの接続は不要。
+Run `bash scripts/benchmark-rendering.sh` from the repository root.
+By default, the script checks the Homebrew installation information against the app version and uses the source for the matching local tag as the baseline.
+If a baseline is specified, use `bash scripts/benchmark-rendering.sh --baseline-ref <ref>`. Homebrew is not required in this case.
+See the root README for prerequisites and usage. No connection to an AI service is required.
 
-CLIが表示する `build/benchmarks/<日時と一意な接尾辞>/comparison.md` と `summary.csv` を読み、通常描画とキャッシュ描画の中央値、p95、初回生成時間、比較元に対する倍率を報告する。
-倍率は現在/比較元の時間で、小さいほど速い。先頭・中央・末尾の操作対象を区別する。図形1個では同じ対象なので重複を除外している。
-全28条件、3描画モード分の84組と2940フレームをCLIが検証する。性能閾値による合否判定はしない。
+Read `build/benchmarks/<timestamp-and-unique-suffix>/comparison.md` and `summary.csv` printed by the CLI. Report the median, p95, first-generation time, and multiplier against the baseline for normal and cached rendering.
+The multiplier is current time divided by baseline time; a lower value is faster. Distinguish the first, middle, and last interaction targets. With a single shape, these are the same target, so duplicates are omitted.
+The CLI validates 84 combinations across all 28 scenarios and three rendering modes, covering 2,940 frames. It does not determine pass or fail using performance thresholds.
 
-対応ソースを再ビルドした比較であり、インストール済みバイナリの計測ではないことを明記する。
-影など描画内容の差を含み、ベース画像なし、画面転送やUI処理を含まない。単一実行の小さな差を有意差と断定しない。
+State that this comparison rebuilds the matching source and does not measure the installed binary.
+Results include rendering-content differences such as shadows. They do not use a base image or include screen transfer and UI processing. Do not describe a small difference in a single run as statistically significant.
 
-失敗時は終了コード、保存先のerror.txtと該当ログを確認し、具体的な理由を伝える。
-タグ不在、バージョン不一致、未対応APIを別の比較元への自動変更で隠さない。
-既存の結果やユーザーのソース変更を消さず、再計測は同じCLIで新しい保存先に実行する。
+On failure, check the exit code, the saved `error.txt`, and the relevant log, then report the specific cause.
+Do not hide a missing tag, version mismatch, or unsupported API by automatically switching to another baseline.
+Preserve existing results and the user's source changes. To rerun a benchmark, use the same CLI and let it create a new output directory.
