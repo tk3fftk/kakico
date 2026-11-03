@@ -178,8 +178,11 @@ final class ShadowOptimizationTests: XCTestCase {
                             let doc = document(size: size, count: count, width: width, phase: CGFloat(frame % 10))
                             ctx.clear(CGRect(origin: .zero, size: size))
                             let start = DispatchTime.now().uptimeNanoseconds
-                            if mode != "optimized" { ShadowReferenceRenderer.draw(doc, baseImage: nil, shadows: mode != "noShadow", in: ctx) }
-                            else { Renderer.draw(doc, baseImage: nil, in: ctx) }
+                            if mode != "optimized" {
+                                ShadowReferenceRenderer.draw(doc, baseImage: nil, shadows: mode != "noShadow", in: ctx)
+                            } else {
+                                Renderer.draw(doc, baseImage: nil, in: ctx)
+                            }
                             ctx.flush()
                             let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
                             if frame >= 5 { times.append(elapsed) }

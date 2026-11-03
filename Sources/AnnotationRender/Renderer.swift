@@ -6,6 +6,18 @@ import ImageIO
 import UniformTypeIdentifiers
 import AnnotationModel
 
+private struct CanvasCacheKey: Equatable {
+    var elements: [Annotation]
+    var canvas: CGSize
+    var output: CGRect
+    var active: ElementID
+}
+
+private struct CanvasCacheRaster {
+    var image: CGImage?
+    var rect: CGRect
+}
+
 /// Pure drawing pipeline shared by the on-screen canvas and file/clipboard
 /// export, so what you see equals what you get.
 public enum Renderer {
@@ -73,20 +85,10 @@ public enum Renderer {
 
     /// Per-canvas raster cache. Export continues to use `flatten`.
     public final class CanvasCache {
-        private struct Key: Equatable {
-            var elements: [Annotation]
-            var canvas: CGSize
-            var output: CGRect
-            var active: ElementID
-        }
-        private var lowerKey: Key?
-        private var upperKey: Key?
-        private struct Raster {
-            var image: CGImage?
-            var rect: CGRect
-        }
-        private var lower: Raster?
-        private var upper: Raster?
+        private var lowerKey: CanvasCacheKey?
+        private var upperKey: CanvasCacheKey?
+        private var lower: CanvasCacheRaster?
+        private var upper: CanvasCacheRaster?
         private var base: CGImage?
         private(set) var generationCount = 0
 
@@ -103,71 +105,95 @@ public enum Renderer {
                 return Renderer.flatten(doc, baseImage: baseImage, bounds: bounds)
             }
             let out = doc.outputRect(for: bounds)
+            guard canCache(out) else { return renderWithoutCache(doc, baseImage: baseImage, bounds: bounds) }
+            let keys = cacheKeys(doc, index: index, output: out, active: activeElementID)
+            updateRasters(doc, keys: keys, output: out, baseImage: baseImage)
+            base = baseImage
+            return compose(doc, index: index, output: out, baseImage: baseImage, bounds: bounds)
+        }
+
+        private func canCache(_ output: CGRect) -> Bool {
             // Two additional RGBA surfaces, capped at 128 MiB. Bounded
             // surfaces share the output's pixel grid; fractional crops use
             // the direct renderer to avoid resampling at cache boundaries.
-            guard out == out.integral, out.width > 0, out.height > 0,
-                  out.width.rounded() * out.height.rounded() <= CGFloat(128 * 1024 * 1024 / 8) else {
-                reset()
-                return Renderer.flatten(doc, baseImage: baseImage, bounds: bounds)
-            }
-            func context(for rect: CGRect) -> CGContext? {
-                guard let ctx = CGContext(data: nil, width: Int(rect.width), height: Int(rect.height),
-                                          bitsPerComponent: 8, bytesPerRow: 0,
-                                          space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-                ctx.translateBy(x: 0, y: rect.height)
-                ctx.scaleBy(x: 1, y: -1)
-                ctx.translateBy(x: -rect.minX, y: -rect.minY)
-                return ctx
-            }
-            let low = Key(elements: Array(doc.elements[..<index]), canvas: doc.canvasSize, output: out, active: activeElementID)
-            let high = Key(elements: Array(doc.elements[(index + 1)...]), canvas: doc.canvasSize, output: out, active: activeElementID)
+            output == output.integral && output.width > 0 && output.height > 0
+                && output.width * output.height <= CGFloat(128 * 1024 * 1024 / 8)
+        }
+
+        private func renderWithoutCache(_ doc: Document, baseImage: CGImage?, bounds: ExportBounds) -> CGImage? {
+            reset()
+            return Renderer.flatten(doc, baseImage: baseImage, bounds: bounds)
+        }
+
+        private func cacheKeys(_ doc: Document, index: Int, output: CGRect,
+                               active: ElementID) -> (CanvasCacheKey, CanvasCacheKey) {
+            let lower = CanvasCacheKey(elements: Array(doc.elements[..<index]), canvas: doc.canvasSize,
+                                       output: output, active: active)
+            let upper = CanvasCacheKey(elements: Array(doc.elements[(index + 1)...]), canvas: doc.canvasSize,
+                                       output: output, active: active)
+            return (lower, upper)
+        }
+
+        private func updateRasters(_ doc: Document, keys: (CanvasCacheKey, CanvasCacheKey),
+                                   output: CGRect, baseImage: CGImage?) {
             let changedBase = base !== baseImage
-            func raster(_ elements: [Annotation], includeBase: Bool) -> Raster? {
-                var rect = includeBase && baseImage != nil ? out : CGRect.null
-                for element in elements {
-                    // Text glyphs can overhang their layout frame. Keep the full
-                    // surface for text until glyph ink bounds are available.
-                    if case .text = element { rect = out; break }
-                    var ink = element.boundingBox()
-                    if case .arrow(let arrow) = element {
-                        for point in arrow.arrowOutline() {
-                            ink = ink.union(CGRect(origin: point, size: .zero))
-                        }
-                    }
-                    let width = element.strokeWidth ?? 0
-                    let margin = max(1.5, width * 0.5) * 3 + max(1.5, width * 0.35) + 2
-                    rect = rect.union(ink.insetBy(dx: -margin, dy: -margin))
+            if lowerKey != keys.0 || changedBase || lower == nil {
+                lower = rasterize(keys.0.elements, doc: doc, output: output, baseImage: baseImage, includeBase: true)
+                lowerKey = keys.0
+            }
+            if upperKey != keys.1 || changedBase || upper == nil {
+                upper = rasterize(keys.1.elements, doc: doc, output: output, baseImage: baseImage, includeBase: false)
+                upperKey = keys.1
+            }
+        }
+
+        private func rasterize(_ elements: [Annotation], doc: Document, output: CGRect,
+                               baseImage: CGImage?, includeBase: Bool) -> CanvasCacheRaster? {
+            let rect = rasterBounds(elements, output: output, includeBase: includeBase && baseImage != nil)
+            guard !rect.isNull, !rect.isEmpty else { return CanvasCacheRaster(image: nil, rect: .zero) }
+            guard let ctx = context(for: rect) else { return nil }
+            if includeBase, let baseImage {
+                Renderer.drawImage(baseImage, in: CGRect(origin: .zero, size: doc.canvasSize), ctx: ctx)
+            }
+            for element in elements { Renderer.draw(element, base: baseImage, canvasSize: doc.canvasSize, in: ctx) }
+            guard let image = ctx.makeImage() else { return nil }
+            generationCount += 1
+            return CanvasCacheRaster(image: image, rect: rect)
+        }
+
+        private func rasterBounds(_ elements: [Annotation], output: CGRect, includeBase: Bool) -> CGRect {
+            var rect = includeBase ? output : CGRect.null
+            for element in elements {
+                if case .text = element { return output }
+                var ink = element.boundingBox()
+                if case .arrow(let arrow) = element {
+                    for point in arrow.arrowOutline() { ink = ink.union(CGRect(origin: point, size: .zero)) }
                 }
-                rect = rect.integral.intersection(out)
-                if rect.isNull || rect.isEmpty { return Raster(image: nil, rect: .zero) }
-                guard let ctx = context(for: rect) else { return nil }
-                if includeBase, let baseImage {
-                    Renderer.drawImage(baseImage, in: CGRect(origin: .zero, size: doc.canvasSize), ctx: ctx)
-                }
-                for element in elements {
-                    Renderer.draw(element, base: baseImage, canvasSize: doc.canvasSize, in: ctx)
-                }
-                guard let image = ctx.makeImage() else { return nil }
-                generationCount += 1
-                return Raster(image: image, rect: rect)
+                let width = element.strokeWidth ?? 0
+                let margin = max(1.5, width * 0.5) * 3 + max(1.5, width * 0.35) + 2
+                rect = rect.union(ink.insetBy(dx: -margin, dy: -margin))
             }
-            if lowerKey != low || changedBase || lower == nil {
-                lower = raster(low.elements, includeBase: true); lowerKey = low
+            return rect.integral.intersection(output)
+        }
+
+        private func context(for rect: CGRect) -> CGContext? {
+            guard let ctx = CGContext(data: nil, width: Int(rect.width), height: Int(rect.height),
+                                      bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            ctx.translateBy(x: 0, y: rect.height)
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.translateBy(x: -rect.minX, y: -rect.minY)
+            return ctx
+        }
+
+        private func compose(_ doc: Document, index: Int, output: CGRect,
+                             baseImage: CGImage?, bounds: ExportBounds) -> CGImage? {
+            guard let lower, let upper, let ctx = context(for: output) else {
+                return renderWithoutCache(doc, baseImage: baseImage, bounds: bounds)
             }
-            if upperKey != high || changedBase || upper == nil {
-                upper = raster(high.elements, includeBase: false); upperKey = high
-            }
-            base = baseImage
-            guard let lower, let upper, let ctx = context(for: out) else {
-                reset()
-                return Renderer.flatten(doc, baseImage: baseImage, bounds: bounds)
-            }
-            if bounds == .expandToFit { Renderer.setFill(ctx, .white); ctx.fill(out) }
+            if bounds == .expandToFit { Renderer.setFill(ctx, .white); ctx.fill(output) }
             if let image = lower.image {
-                // The destination is transparent in clip mode, so copying the
-                // premultiplied pixels avoids blending with an empty surface.
                 if bounds == .clipToImage { ctx.setBlendMode(.copy) }
                 Renderer.drawImage(image, in: lower.rect, ctx: ctx)
                 ctx.setBlendMode(.normal)
