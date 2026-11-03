@@ -54,15 +54,15 @@ arm64, ad-hoc-signed bundle (no Apple Developer account required).
 
 ## Rendering benchmark
 
-Run the standalone CLI from this repository (no AI service required):
+Run the standalone Bash CLI from this repository (no Python or AI service required):
 
 ```sh
-python3 scripts/benchmark-rendering.py
-python3 scripts/benchmark-rendering.py --baseline-ref v0.1.2
-python3 scripts/benchmark-rendering.py --help
+bash scripts/benchmark-rendering.sh
+bash scripts/benchmark-rendering.sh --baseline-ref v0.1.2
+bash scripts/benchmark-rendering.sh --help
 ```
 
-Requires macOS 15+, Swift 6+, Python 3.9+, Git, and network access or a populated
+Requires macOS 15+, Swift 6+, Bash 3.2+, jq, Git, and network access or a populated
 SwiftPM dependency cache. The default also requires Homebrew-installed Kakico,
 its application bundle, and a matching local `v<version>` Git tag. The installed
 Homebrew version must match the app's version; missing tags or mismatches stop

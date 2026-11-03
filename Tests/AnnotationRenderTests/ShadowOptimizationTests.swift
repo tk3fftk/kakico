@@ -89,6 +89,48 @@ final class ShadowOptimizationTests: XCTestCase {
         XCTAssertEqual(cache.generationCount, 5)
     }
 
+    func testBoundedCachePreservesPixelsAndInvalidates() throws {
+        var doc = document(size: CGSize(width: 640, height: 480), count: 4, width: 48)
+        doc.add(.text(TextElement(origin: CGPoint(x: 50, y: 100),
+                                  size: CGSize(width: 200, height: 80), string: "Italic 日本語")))
+        doc.add(.pixelate(RedactionElement(rect: CGRect(x: 30, y: 40, width: 80, height: 60), amount: 12)))
+        let baseContext = try XCTUnwrap(CGContext(data: nil, width: 640, height: 480,
+            bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        baseContext.setFillColor(CGColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 0.7))
+        baseContext.fill(CGRect(x: 0, y: 0, width: 320, height: 480))
+        let base = try XCTUnwrap(baseContext.makeImage())
+        let cache = Renderer.CanvasCache()
+        func check(_ base: CGImage?, _ bounds: ExportBounds, _ index: Int) throws {
+            let actual = try XCTUnwrap(cache.flatten(doc, baseImage: base,
+                activeElementID: doc.elements[index].id, bounds: bounds))
+            let expected = try XCTUnwrap(Renderer.flatten(doc, baseImage: base, bounds: bounds))
+            XCTAssertEqual(actual.width, expected.width)
+            XCTAssertEqual(actual.height, expected.height)
+            let a = Array(actual.dataProvider!.data! as Data)
+            let b = Array(expected.dataProvider!.data! as Data)
+            XCTAssertEqual(a.count, b.count)
+            XCTAssertLessThanOrEqual(zip(a, b).map { abs(Int($0) - Int($1)) }.max() ?? 0, 4)
+        }
+        for crop in [nil, CGRect(x: 13, y: 21, width: 390, height: 310),
+                     CGRect(x: 13.5, y: 21.25, width: 390.5, height: 310.5)] as [CGRect?] {
+            doc.crop = crop
+            for bounds in [ExportBounds.clipToImage, .expandToFit] {
+                for index in doc.elements.indices {
+                    try check(nil, bounds, index)
+                    try check(base, bounds, index)
+                    doc.elements[index].translate(by: CGVector(dx: -60.5, dy: 10.25))
+                    try check(base, bounds, index)
+                    try check(nil, bounds, index)
+                }
+            }
+        }
+        doc = document(size: CGSize(width: 640, height: 480), count: 1, width: 48)
+        try check(nil, .clipToImage, 0)
+        doc.elements[0].translate(by: CGVector(dx: 1000, dy: 1000))
+        try check(nil, .clipToImage, 0)
+    }
+
     func testCanvasCacheBenchmark() throws {
         guard ProcessInfo.processInfo.environment["CANVAS_CACHE_BENCHMARK"] == "1" else { throw XCTSkip("opt-in benchmark") }
         for size in [CGSize(width: 1920, height: 1080), CGSize(width: 3840, height: 2160)] {
