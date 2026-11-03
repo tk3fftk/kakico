@@ -67,6 +67,58 @@ final class ShadowOptimizationTests: XCTestCase {
         }
     }
 
+    func testCanvasCacheReusesUnchangedSides() throws {
+        var doc = document(size: CGSize(width: 400, height: 300), count: 20, width: 24)
+        let cache = Renderer.CanvasCache()
+        let id = doc.elements[10].id
+        for step in 0..<3 {
+            let image = try XCTUnwrap(cache.flatten(doc, baseImage: nil, activeElementID: id))
+            let expected = try XCTUnwrap(Renderer.flatten(doc, baseImage: nil))
+            let a = Array(image.dataProvider!.data! as Data)
+            let b = Array(expected.dataProvider!.data! as Data)
+            let diff = zip(a, b).map { abs(Int($0) - Int($1)) }
+            XCTAssertLessThanOrEqual(diff.max() ?? 0, 4)
+            XCTAssertEqual(cache.generationCount, 2)
+            doc.elements[10].translate(by: CGVector(dx: CGFloat(step + 1), dy: 1))
+        }
+        doc.elements[0].translate(by: CGVector(dx: 1, dy: 0))
+        _ = cache.flatten(doc, baseImage: nil, activeElementID: id)
+        XCTAssertEqual(cache.generationCount, 3)
+        cache.reset()
+        _ = cache.flatten(doc, baseImage: nil, activeElementID: id)
+        XCTAssertEqual(cache.generationCount, 5)
+    }
+
+    func testCanvasCacheBenchmark() throws {
+        guard ProcessInfo.processInfo.environment["CANVAS_CACHE_BENCHMARK"] == "1" else { throw XCTSkip("opt-in benchmark") }
+        for size in [CGSize(width: 1920, height: 1080), CGSize(width: 3840, height: 2160)] {
+            for count in [1, 20, 100] {
+                for width: CGFloat in [6, 24] {
+                    for index in Set([0, count / 2, count - 1]).sorted() {
+                        for cached in [false, true] {
+                            var doc = document(size: size, count: count, width: width)
+                            let cache = Renderer.CanvasCache()
+                            var times: [Double] = []
+                            for frame in 0..<35 {
+                                doc.elements[index].translate(by: CGVector(dx: 1, dy: 0))
+                                let start = DispatchTime.now().uptimeNanoseconds
+                                let image = cached
+                                    ? cache.flatten(doc, baseImage: nil, activeElementID: doc.elements[index].id)
+                                    : Renderer.flatten(doc, baseImage: nil)
+                                XCTAssertNotNil(image)
+                                let ms = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
+                                if frame == 0 { print("CACHE_PREP,\(Int(size.width)),\(count),\(width),\(index),\(cached),\(ms)") }
+                                if frame >= 5 { times.append(ms) }
+                            }
+                            times.sort()
+                            print("CACHE_BENCH,\(Int(size.width)),\(count),\(width),\(index),\(cached),\((times[14] + times[15]) / 2),\(times[28])")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Opt in: SHADOW_BENCHMARK=1 swift test -c release --filter ShadowOptimizationTests/testBenchmark
     func testBenchmark() throws {
         guard ProcessInfo.processInfo.environment["SHADOW_BENCHMARK"] == "1" else { throw XCTSkip("opt-in Release benchmark") }

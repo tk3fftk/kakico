@@ -59,3 +59,20 @@ SHADOW_BENCHMARK=1 swift test -c release --filter ShadowOptimizationTests
 - `bash scripts/build-app.sh`: Releaseアプリのビルド・署名検証成功。
 - 実アプリのドラッグ・サイズ変更: UI接続が2回タイムアウトしたため未確認。操作中の目視確認は残っている。
 - 新しいSDKでSwiftUI.Documentと衝突した3箇所は `AnnotationModel.Document` と明示してビルドを修正した。
+
+## 確定図形キャッシュ
+
+キャンバス専用の `Renderer.CanvasCache` を追加した。操作対象より下の図形（ベース画像込み）と上の図形を透明画像として保持し、その間に対象を描画する。
+対象はドラッグ中のIDを優先し、それ以外は選択IDとするため、属性変更にも適用される。書き出しの経路は変更しない。
+画像の内容・順序・対象ID・出力矩形・キャンバスサイズ・ベース画像の同一性で再利用を判断する。
+追加2画像は合計128MiB相当までとし、超過時や生成失敗時は従来の描画に戻る。出力矩形が変わるexpandToFit操作では再生成する。
+
+`CANVAS_CACHE_BENCHMARK=1 swift test -c release --filter ShadowOptimizationTests/testCanvasCache` で再現できる。
+[生データ](canvas-cache.csv)には初回準備と再利用中の中央値・p95を記録した。ビットマップ生成と合成を含み、画面転送は含まない。
+各条件35回、先頭5回を除き、対象を毎回1px移動する。解像度1080p/4K、個数1/20/100、線幅6/24、対象は先頭・中央・末尾。
+
+100図形の再利用中p95は1080pで1.58〜4.81ms、4Kで5.34〜6.73msだった。
+同条件の従来描画は1080pで12.13〜28.38ms、4Kで13.75〜30.12ms。
+100図形の全条件で中央値半減、1080pのp95 16ms以内を達成した。
+対象のみの変更で上下画像が再生成されないこと、下側変更時の片側更新、reset後の再生成、従来flattenとのRGBA比較をテストした。
+全テストとReleaseのキャッシュテストは成功した。実アプリの操作確認は未実施。

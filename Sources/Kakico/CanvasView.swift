@@ -68,6 +68,7 @@ final class CanvasNSView: NSView {
     /// by `draw(_:)` so draw needn't evaluate `displayInfo` (a Document copy
     /// plus an O(n) canvas-rect scan) a second time.
     private var reconciledInfo: DisplayInfo?
+    private let rasterCache = Renderer.CanvasCache()
     private var flattened: CGImage?
     // Cache key for `flattened`: re-render only when the content it shows
     // (document sans crop + base image) actually changes, not on every redraw.
@@ -241,7 +242,7 @@ final class CanvasNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext,
-              let controller, let doc = controller.document else { return }
+              let controller, let doc = controller.document else { rasterCache.reset(); return }
         let exportBounds = controller.exportBounds
         let version = controller.documentVersion
         if flattened == nil || flattenedVersion != version
@@ -252,8 +253,13 @@ final class CanvasNSView: NSView {
             // content; the equality keeps them from re-flattening.
             if flattened == nil || flattenedKey != displayDoc
                 || flattenedBase !== controller.baseImage || flattenedBounds != exportBounds {
-                flattened = Renderer.flatten(displayDoc, baseImage: controller.baseImage, scale: 1,
-                                            bounds: exportBounds)
+                let activeID: ElementID?
+                switch drag {
+                case .moving(let id, _), .handle(let id, _), .creating(let id, _): activeID = id
+                default: activeID = controller.selection
+                }
+                flattened = rasterCache.flatten(displayDoc, baseImage: controller.baseImage,
+                                                activeElementID: activeID, bounds: exportBounds)
                 flattenedKey = displayDoc
                 flattenedBase = controller.baseImage
                 flattenedBounds = exportBounds

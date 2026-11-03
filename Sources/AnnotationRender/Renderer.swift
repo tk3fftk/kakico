@@ -71,6 +71,83 @@ public enum Renderer {
         return ctx.makeImage()
     }
 
+    /// Per-canvas raster cache. Export continues to use `flatten`.
+    public final class CanvasCache {
+        private struct Key: Equatable {
+            var elements: [Annotation]
+            var canvas: CGSize
+            var output: CGRect
+            var active: ElementID
+        }
+        private var lowerKey: Key?
+        private var upperKey: Key?
+        private var lower: CGImage?
+        private var upper: CGImage?
+        private var base: CGImage?
+        private(set) var generationCount = 0
+
+        public init() {}
+
+        public func reset() {
+            lower = nil; upper = nil; lowerKey = nil; upperKey = nil; base = nil
+        }
+
+        public func flatten(_ doc: Document, baseImage: CGImage?, activeElementID: ElementID?,
+                            bounds: ExportBounds = .clipToImage) -> CGImage? {
+            guard let activeElementID, let index = doc.index(of: activeElementID) else {
+                reset()
+                return Renderer.flatten(doc, baseImage: baseImage, bounds: bounds)
+            }
+            let out = doc.outputRect(for: bounds)
+            // Two additional RGBA surfaces, capped at 128 MiB.
+            guard out.width > 0, out.height > 0,
+                  out.width.rounded() * out.height.rounded() <= CGFloat(128 * 1024 * 1024 / 8) else {
+                reset()
+                return Renderer.flatten(doc, baseImage: baseImage, bounds: bounds)
+            }
+            func context() -> CGContext? {
+                guard let ctx = CGContext(data: nil, width: Int(out.width.rounded()), height: Int(out.height.rounded()),
+                                          bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+                ctx.translateBy(x: 0, y: out.height)
+                ctx.scaleBy(x: 1, y: -1)
+                ctx.translateBy(x: -out.minX, y: -out.minY)
+                return ctx
+            }
+            let low = Key(elements: Array(doc.elements[..<index]), canvas: doc.canvasSize, output: out, active: activeElementID)
+            let high = Key(elements: Array(doc.elements[(index + 1)...]), canvas: doc.canvasSize, output: out, active: activeElementID)
+            let changedBase = base !== baseImage
+            func raster(_ elements: [Annotation], includeBase: Bool) -> CGImage? {
+                guard let ctx = context() else { return nil }
+                if includeBase, let baseImage {
+                    Renderer.drawImage(baseImage, in: CGRect(origin: .zero, size: doc.canvasSize), ctx: ctx)
+                }
+                for element in elements {
+                    Renderer.draw(element, base: baseImage, canvasSize: doc.canvasSize, in: ctx)
+                }
+                generationCount += 1
+                return ctx.makeImage()
+            }
+            if lowerKey != low || changedBase || lower == nil {
+                lower = raster(low.elements, includeBase: true); lowerKey = low
+            }
+            if upperKey != high || changedBase || upper == nil {
+                upper = raster(high.elements, includeBase: false); upperKey = high
+            }
+            base = baseImage
+            guard let lower, let upper, let ctx = context() else {
+                reset()
+                return Renderer.flatten(doc, baseImage: baseImage, bounds: bounds)
+            }
+            if bounds == .expandToFit { Renderer.setFill(ctx, .white); ctx.fill(out) }
+            Renderer.drawImage(lower, in: out, ctx: ctx)
+            Renderer.draw(doc.elements[index], base: baseImage, canvasSize: doc.canvasSize, in: ctx)
+            Renderer.drawImage(upper, in: out, ctx: ctx)
+            return ctx.makeImage()
+        }
+    }
+
     /// Encodes a CGImage to PNG, JPEG, or WebP bytes. WebP goes through
     /// libwebp (lossy) because ImageIO cannot write it; `quality` applies to
     /// both lossy formats.
